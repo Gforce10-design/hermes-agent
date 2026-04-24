@@ -2955,13 +2955,31 @@ class HermesCLI:
 
         self._stream_buf += text
 
-        # Emit complete lines, keep partial remainder in buffer
         _tc = getattr(self, "_stream_text_ansi", "")
+        # Emit complete lines first (with padding + newline via _cprint)
         while "\n" in self._stream_buf:
             line, self._stream_buf = self._stream_buf.split("\n", 1)
             if self.final_response_markdown == "strip":
                 line = _strip_markdown_syntax(line)
-            _cprint(f"{_STREAM_PAD}{_tc}{line}{_RST}" if _tc else f"{_STREAM_PAD}{line}")
+            if getattr(self, "_stream_mid_line", False):
+                _cprint(f"{_tc}{line}{_RST}" if _tc else line)
+            else:
+                _cprint(f"{_STREAM_PAD}{_tc}{line}{_RST}" if _tc else f"{_STREAM_PAD}{line}")
+            self._stream_mid_line = False
+
+        # Emit remaining partial text immediately (no newline) so tokens
+        # appear progressively instead of waiting for end-of-line.
+        if self._stream_buf:
+            partial = _strip_markdown_syntax(self._stream_buf) if self.final_response_markdown == "strip" else self._stream_buf
+            if not getattr(self, "_stream_mid_line", False):
+                _pt_print(_PT_ANSI(_STREAM_PAD), end="", flush=True)
+                self._stream_mid_line = True
+            _pt_print(
+                _PT_ANSI(f"{_tc}{partial}{_RST}" if _tc else partial),
+                end="",
+                flush=True,
+            )
+            self._stream_buf = ""
 
     def _flush_stream(self) -> None:
         """Emit any remaining partial line from the stream buffer and close the box."""
@@ -2979,8 +2997,16 @@ class HermesCLI:
         if self._stream_buf:
             _tc = getattr(self, "_stream_text_ansi", "")
             line = _strip_markdown_syntax(self._stream_buf) if self.final_response_markdown == "strip" else self._stream_buf
-            _cprint(f"{_STREAM_PAD}{_tc}{line}{_RST}" if _tc else f"{_STREAM_PAD}{line}")
+            if getattr(self, "_stream_mid_line", False):
+                _cprint(f"{_tc}{line}{_RST}" if _tc else line)
+            else:
+                _cprint(f"{_STREAM_PAD}{_tc}{line}{_RST}" if _tc else f"{_STREAM_PAD}{line}")
             self._stream_buf = ""
+            self._stream_mid_line = False
+        elif getattr(self, "_stream_mid_line", False):
+            # Terminate the dangling partial line before closing the box.
+            _cprint("")
+            self._stream_mid_line = False
 
         # Close the response box
         if self._stream_box_opened:
@@ -3000,6 +3026,7 @@ class HermesCLI:
         self._reasoning_buf = ""
         self._reasoning_preview_buf = ""
         self._deferred_content = ""
+        self._stream_mid_line = False
 
     def _slow_command_status(self, command: str) -> str:
         """Return a user-facing status message for slower slash commands."""

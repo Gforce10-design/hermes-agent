@@ -574,6 +574,51 @@ class TestNousAuxiliaryRefresh:
         assert client is not None
         assert model == "google/gemini-3-flash-preview"
 
+    def test_task_provider_main_uses_main_model_instead_of_aux_default(self, monkeypatch, tmp_path):
+        """provider: main should follow the configured main model, not the provider's aux default."""
+        hermes_home = tmp_path / "hermes"
+        hermes_home.mkdir(parents=True, exist_ok=True)
+        (hermes_home / "config.yaml").write_text(
+            """auxiliary:
+  session_search:
+    provider: main
+model:
+  provider: openai-codex
+  default: gpt-5.4
+"""
+        )
+        monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+
+        with patch("agent.auxiliary_client._try_codex", return_value=(MagicMock(), "gpt-5.2-codex")):
+            client, model = get_text_auxiliary_client("session_search")
+
+        assert client is not None
+        assert model == "gpt-5.4"
+
+    def test_resolve_vision_provider_main_uses_main_model(self, monkeypatch, tmp_path):
+        """Vision provider=main should reuse the main model/runtime instead of aux Codex defaults."""
+        hermes_home = tmp_path / "hermes"
+        hermes_home.mkdir(parents=True, exist_ok=True)
+        (hermes_home / "config.yaml").write_text(
+            """auxiliary:
+  vision:
+    provider: main
+model:
+  provider: openai-codex
+  default: gpt-5.4
+"""
+        )
+        monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+
+        fake_client = MagicMock()
+        with patch("agent.auxiliary_client._get_cached_client", return_value=(fake_client, "gpt-5.4")) as mock_cached:
+            provider, client, model = resolve_vision_provider_client()
+
+        assert provider == "openai-codex"
+        assert client is fake_client
+        assert model == "gpt-5.4"
+        assert mock_cached.call_args.args[:2] == ("openai-codex", "gpt-5.4")
+
     def test_call_llm_retries_nous_after_401(self):
         class _Auth401(Exception):
             status_code = 401

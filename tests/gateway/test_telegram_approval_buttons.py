@@ -88,6 +88,7 @@ class TestTelegramExecApproval:
         assert kwargs["chat_id"] == 12345
         assert "rm -rf /important" in kwargs["text"]
         assert "dangerous deletion" in kwargs["text"]
+        assert kwargs["parse_mode"] is not None
         assert kwargs["reply_markup"] is not None  # InlineKeyboardMarkup
 
     @pytest.mark.asyncio
@@ -124,6 +125,30 @@ class TestTelegramExecApproval:
 
         kwargs = adapter._bot.send_message.call_args[1]
         assert kwargs.get("message_thread_id") == 999
+
+    @pytest.mark.asyncio
+    async def test_markdown_sensitive_command_uses_html_pre_block(self):
+        adapter = _make_adapter()
+        mock_msg = MagicMock()
+        mock_msg.message_id = 77
+        adapter._bot.send_message = AsyncMock(return_value=mock_msg)
+
+        command = "python -c \"print('[bad]_path(/tmp/x)')\" && cat /tmp/a_b[c].txt"
+        description = "shell command via -c/-lc flag [needs review]_now"
+        result = await adapter.send_exec_approval(
+            chat_id="12345",
+            command=command,
+            session_key="sensitive-session",
+            description=description,
+        )
+
+        assert result.success is True
+        kwargs = adapter._bot.send_message.call_args[1]
+        assert kwargs["parse_mode"] is not None
+        assert "<pre>" in kwargs["text"]
+        assert "[bad]_path(/tmp/x)" in kwargs["text"]
+        assert "a_b[c].txt" in kwargs["text"]
+        assert description in kwargs["text"]
 
     @pytest.mark.asyncio
     async def test_not_connected(self):
