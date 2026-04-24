@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Any
 
 from hermes_cli.config import get_hermes_home
+from .arbiter import maybe_arbitrate_delivery
 
 logger = logging.getLogger(__name__)
 
@@ -249,6 +250,26 @@ class DeliveryRouter:
         send_metadata = dict(metadata or {})
         if target.thread_id and "thread_id" not in send_metadata:
             send_metadata["thread_id"] = target.thread_id
+
+        arbiter_metadata = dict(send_metadata)
+        arbiter_metadata.setdefault("content", content)
+        decision = maybe_arbitrate_delivery(arbiter_metadata)
+        if decision is not None:
+            send_metadata["arbiter_trace_id"] = decision.trace_id
+            send_metadata["arbiter_decision_reason"] = decision.reason
+            if not decision.allow:
+                logger.warning(
+                    "Delivery denied by arbiter: topic=%s bot=%s reason=%s",
+                    send_metadata.get("arbiter_topic"),
+                    send_metadata.get("arbiter_bot_name"),
+                    decision.reason,
+                )
+                return {
+                    "success": False,
+                    "arbiter": True,
+                    "decision": decision.to_dict(),
+                }
+
         return await adapter.send(target.chat_id, content, metadata=send_metadata or None)
 
 
