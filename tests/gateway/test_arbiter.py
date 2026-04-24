@@ -282,3 +282,87 @@ async def test_delivery_router_allows_opt_in_metadata(routing_file, db_file, hea
     sent_meta = adapter.send.await_args.kwargs["metadata"]
     assert sent_meta["arbiter_trace_id"]
     assert sent_meta["arbiter_decision_reason"] == "ok"
+
+
+
+# ---------------------------------------------------------------------------
+
+
+
+# ---------------------------------------------------------------------------
+# TelegramAdapter gate (adapter-level wiring) --------------------------------
+# ---------------------------------------------------------------------------
+
+from gateway.config import Platform as _Platform
+from gateway.platforms.base import SendResult
+from gateway.platforms.telegram import TelegramAdapter
+
+
+def _make_unbound_adapter():
+    adapter = TelegramAdapter.__new__(TelegramAdapter)
+    adapter.platform = _Platform.TELEGRAM  # name property reads self.platform.value.title()
+    return adapter
+
+
+def test_adapter_gate_noop_without_arbiter_metadata():
+    adapter = _make_unbound_adapter()
+
+    meta, gate = adapter._apply_arbiter_gate(
+        surface="send_image_file", content="hi", metadata=None
+    )
+    assert meta is None and gate is None
+
+    meta, gate = adapter._apply_arbiter_gate(
+        surface="send_image_file", content="hi", metadata={"thread_id": "42"}
+    )
+    assert meta == {"thread_id": "42"}
+    assert gate is None
+
+
+def test_adapter_gate_allows_and_stamps_trace(
+    routing_file, db_file, heartbeat_dir
+):
+    adapter = _make_unbound_adapter()
+
+    meta, gate = adapter._apply_arbiter_gate(
+        surface="send_image_file",
+        content="image:/tmp/foo.png",
+        metadata={
+            "arbiter_topic": "dev-command",
+            "arbiter_bot_name": "HermesA8_bot",
+            "arbiter_action": {"type": "message", "payload": "image:/tmp/foo.png"},
+            "arbiter_routing_yml": str(routing_file),
+            "arbiter_idempotency_db": str(db_file),
+            "arbiter_heartbeat_dir": str(heartbeat_dir),
+        },
+    )
+
+    assert gate is None
+    assert meta is not None
+    assert meta["arbiter_decision_reason"] == "ok"
+    assert meta["arbiter_trace_id"]
+
+
+def test_adapter_gate_denies_on_global_deny(
+    routing_file, db_file, heartbeat_dir
+):
+    adapter = _make_unbound_adapter()
+
+    meta, gate = adapter._apply_arbiter_gate(
+        surface="send_exec_approval",
+        content="exec_approval:rm -rf /",
+        metadata={
+            "arbiter_topic": "dev-command",
+            "arbiter_bot_name": "HermesA8_bot",
+            "arbiter_action": {"type": "shell", "payload": "rm -rf /"},
+            "arbiter_routing_yml": str(routing_file),
+            "arbiter_idempotency_db": str(db_file),
+            "arbiter_heartbeat_dir": str(heartbeat_dir),
+        },
+    )
+
+    assert isinstance(gate, SendResult)
+    assert gate.success is False
+    assert gate.error.startswith("arbiter_denied:global_deny:")
+    assert meta is not None
+    assert meta["arbiter_decision_reason"].startswith("global_deny:")

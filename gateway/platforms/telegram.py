@@ -63,6 +63,7 @@ from pathlib import Path as _Path
 sys.path.insert(0, str(_Path(__file__).resolve().parents[2]))
 
 from gateway.config import Platform, PlatformConfig
+from gateway.arbiter import maybe_arbitrate_delivery
 from gateway.platforms.base import (
     BasePlatformAdapter,
     MessageEvent,
@@ -966,6 +967,39 @@ class TelegramAdapter(BasePlatformAdapter):
         else:  # "first" (default)
             return chunk_index == 0
 
+    def _apply_arbiter_gate(
+        self,
+        *,
+        surface: str,
+        content: str,
+        metadata: Optional[Dict[str, Any]],
+    ):
+        """Opt-in arbiter gate. No-op when metadata lacks arbiter_*."""
+        if not metadata:
+            return metadata, None
+        probe = dict(metadata)
+        probe.setdefault("content", content)
+        decision = maybe_arbitrate_delivery(probe)
+        if decision is None:
+            return metadata, None
+        augmented = dict(metadata)
+        augmented["arbiter_trace_id"] = decision.trace_id
+        augmented["arbiter_decision_reason"] = decision.reason
+        if not decision.allow:
+            logger.warning(
+                "[%s] %s denied by arbiter: topic=%s bot=%s reason=%s",
+                self.name,
+                surface,
+                augmented.get("arbiter_topic"),
+                augmented.get("arbiter_bot_name"),
+                decision.reason,
+            )
+            return augmented, SendResult(
+                success=False,
+                error=f"arbiter_denied:{decision.reason}",
+            )
+        return augmented, None
+
     async def send(
         self,
         chat_id: str,
@@ -976,6 +1010,14 @@ class TelegramAdapter(BasePlatformAdapter):
         """Send a message to a Telegram chat."""
         if not self._bot:
             return SendResult(success=False, error="Not connected")
+
+        metadata, _gate = self._apply_arbiter_gate(
+            surface="send",
+            content=content,
+            metadata=metadata,
+        )
+        if _gate is not None:
+            return _gate
         
         # Skip whitespace-only text to prevent Telegram 400 empty-text errors.
         if not content or not content.strip():
@@ -1211,6 +1253,7 @@ class TelegramAdapter(BasePlatformAdapter):
     async def send_update_prompt(
         self, chat_id: str, prompt: str, default: str = "",
         session_key: str = "",
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> SendResult:
         """Send an inline-keyboard update prompt (Yes / No buttons).
 
@@ -1219,6 +1262,14 @@ class TelegramAdapter(BasePlatformAdapter):
         """
         if not self._bot:
             return SendResult(success=False, error="Not connected")
+
+        metadata, _gate = self._apply_arbiter_gate(
+            surface="send_update_prompt",
+            content=prompt,
+            metadata=metadata,
+        )
+        if _gate is not None:
+            return _gate
         try:
             default_hint = f" (default: {default})" if default else ""
             text = f"⚕ *Update needs your input:*\n\n{prompt}{default_hint}"
@@ -1252,6 +1303,14 @@ class TelegramAdapter(BasePlatformAdapter):
         """
         if not self._bot:
             return SendResult(success=False, error="Not connected")
+
+        metadata, _gate = self._apply_arbiter_gate(
+            surface="send_exec_approval",
+            content=f"exec_approval:{command}",
+            metadata=metadata,
+        )
+        if _gate is not None:
+            return _gate
 
         try:
             cmd_preview = command[:3800] + "..." if len(command) > 3800 else command
@@ -1321,6 +1380,14 @@ class TelegramAdapter(BasePlatformAdapter):
         """
         if not self._bot:
             return SendResult(success=False, error="Not connected")
+
+        metadata, _gate = self._apply_arbiter_gate(
+            surface="send_model_picker",
+            content=f"model_picker:{current_model}",
+            metadata=metadata,
+        )
+        if _gate is not None:
+            return _gate
 
         try:
             from hermes_cli.providers import get_label
@@ -1731,6 +1798,14 @@ class TelegramAdapter(BasePlatformAdapter):
         """Send audio as a native Telegram voice message or audio file."""
         if not self._bot:
             return SendResult(success=False, error="Not connected")
+
+        metadata, _gate = self._apply_arbiter_gate(
+            surface="send_voice",
+            content=caption or f"voice:{audio_path}",
+            metadata=metadata,
+        )
+        if _gate is not None:
+            return _gate
         
         try:
             if not os.path.exists(audio_path):
@@ -1780,6 +1855,14 @@ class TelegramAdapter(BasePlatformAdapter):
         if not self._bot:
             return SendResult(success=False, error="Not connected")
 
+        metadata, _gate = self._apply_arbiter_gate(
+            surface="send_image_file",
+            content=caption or f"image:{image_path}",
+            metadata=metadata,
+        )
+        if _gate is not None:
+            return _gate
+
         try:
             if not os.path.exists(image_path):
                 return SendResult(success=False, error=self._missing_media_path_error("Image", image_path))
@@ -1817,6 +1900,14 @@ class TelegramAdapter(BasePlatformAdapter):
         if not self._bot:
             return SendResult(success=False, error="Not connected")
 
+        metadata, _gate = self._apply_arbiter_gate(
+            surface="send_document",
+            content=caption or f"document:{file_path}",
+            metadata=metadata,
+        )
+        if _gate is not None:
+            return _gate
+
         try:
             if not os.path.exists(file_path):
                 return SendResult(success=False, error=self._missing_media_path_error("File", file_path))
@@ -1851,6 +1942,14 @@ class TelegramAdapter(BasePlatformAdapter):
         if not self._bot:
             return SendResult(success=False, error="Not connected")
 
+        metadata, _gate = self._apply_arbiter_gate(
+            surface="send_video",
+            content=caption or f"video:{video_path}",
+            metadata=metadata,
+        )
+        if _gate is not None:
+            return _gate
+
         try:
             if not os.path.exists(video_path):
                 return SendResult(success=False, error=self._missing_media_path_error("Video", video_path))
@@ -1884,6 +1983,14 @@ class TelegramAdapter(BasePlatformAdapter):
         """
         if not self._bot:
             return SendResult(success=False, error="Not connected")
+
+        metadata, _gate = self._apply_arbiter_gate(
+            surface="send_image",
+            content=caption or f"image_url:{image_url}",
+            metadata=metadata,
+        )
+        if _gate is not None:
+            return _gate
 
         from tools.url_safety import is_safe_url
         if not is_safe_url(image_url):
@@ -1945,6 +2052,14 @@ class TelegramAdapter(BasePlatformAdapter):
         """Send an animated GIF natively as a Telegram animation (auto-plays inline)."""
         if not self._bot:
             return SendResult(success=False, error="Not connected")
+
+        metadata, _gate = self._apply_arbiter_gate(
+            surface="send_animation",
+            content=caption or f"animation:{animation_url}",
+            metadata=metadata,
+        )
+        if _gate is not None:
+            return _gate
         
         try:
             _anim_thread = self._metadata_thread_id(metadata)
