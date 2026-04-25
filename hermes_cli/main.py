@@ -6047,7 +6047,7 @@ def _cmd_update_impl(args, gateway_mode: bool):
             import signal as _signal
 
             # Drain budget for graceful SIGUSR1 restarts.  The gateway drains
-            # for up to ``agent.restart_drain_timeout`` (default 60s) before
+            # for up to ``agent.restart_drain_timeout`` (default 600s) before
             # exiting with code 75; we wait slightly longer so the drain
             # completes before we fall back to a hard restart.  On older
             # systemd units without SIGUSR1 wiring this wait just times out
@@ -6057,7 +6057,7 @@ def _cmd_update_impl(args, gateway_mode: bool):
                     DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT as _DEFAULT_DRAIN,
                 )
             except Exception:
-                _DEFAULT_DRAIN = 60.0
+                _DEFAULT_DRAIN = 600.0
             _cfg_drain = None
             try:
                 from hermes_cli.config import load_config
