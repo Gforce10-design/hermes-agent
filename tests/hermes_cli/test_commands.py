@@ -342,7 +342,7 @@ class TestSlashCommandCompleter:
     def test_builtin_completion_display_meta_shows_description(self):
         completions = _completions(SlashCommandCompleter(), "/help")
         assert len(completions) == 1
-        assert completions[0].display_meta_text == "Show available commands"
+        assert completions[0].display_meta_text == "사용 가능한 명령어 보기"
 
     # -- exact-match trailing space --------------------------------------
 

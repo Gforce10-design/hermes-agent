@@ -102,6 +102,9 @@ def test_register_registers_both_commands():
     names = [c["name"] for c in captured]
     assert "openclaw" in names
     assert "claw" in names
+    descriptions = {c["name"]: c["description"] for c in captured}
+    assert descriptions["openclaw"] == "OpenClaw 단발 추론 실행(gpt-5.4, Codex OAuth 사용)"
+    assert descriptions["claw"] == "/openclaw 별칭"
     handlers = {c["handler"] for c in captured}
     assert len(handlers) == 1, "both commands should share the same handler"
 

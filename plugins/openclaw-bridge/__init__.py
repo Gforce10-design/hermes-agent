@@ -146,12 +146,12 @@ def register(ctx) -> None:
     ctx.register_command(
         "openclaw",
         handler=_handle_slash,
-        description="Run a one-shot OpenClaw inference (gpt-5.4 via Codex OAuth).",
+        description="OpenClaw 단발 추론 실행(gpt-5.4, Codex OAuth 사용)",
         args_hint="<prompt>",
     )
     ctx.register_command(
         "claw",
         handler=_handle_slash,
-        description="Alias of /openclaw.",
+        description="/openclaw 별칭",
         args_hint="<prompt>",
     )

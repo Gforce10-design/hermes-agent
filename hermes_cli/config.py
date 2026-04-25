@@ -359,8 +359,10 @@ DEFAULT_CONFIG = {
         # Graceful drain timeout for gateway stop/restart (seconds).
         # The gateway stops accepting new work, waits for running agents
         # to finish, then interrupts any remaining runs after the timeout.
+        # Keep this long enough for coding/ops turns triggered from chat;
+        # systemd TimeoutStopSec is generated as this value + cleanup headroom.
         # 0 = no drain, interrupt immediately.
-        "restart_drain_timeout": 60,
+        "restart_drain_timeout": 600,
         # Max app-level retry attempts for API errors (connection drops,
         # provider timeouts, 5xx, etc.) before the agent surfaces the
         # failure.  The OpenAI SDK already does its own low-level retries
