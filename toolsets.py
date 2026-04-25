@@ -54,6 +54,10 @@ _HERMES_CORE_TOOLS = [
     "clarify",
     # Code execution + delegation
     "execute_code", "delegate_task",
+    # OpenClaw integration: delegate to local OpenClaw agent runtime when
+    # browser automation, capability inference, channel posting, or other
+    # OpenClaw-shaped work is the right call.
+    "openclaw_task",
     # Cronjob management
     "cronjob",
     # Cross-platform messaging (gated on gateway running via check_fn)
@@ -189,6 +193,12 @@ TOOLSETS = {
     "delegation": {
         "description": "Spawn subagents with isolated context for complex subtasks",
         "tools": ["delegate_task"],
+        "includes": []
+    },
+
+    "openclaw": {
+        "description": "Delegate tasks to the local OpenClaw agent runtime (browser automation, capability inference, channels). Hermes orchestrator calls openclaw_task; OpenClaw runs its own tool-use loop.",
+        "tools": ["openclaw_task"],
         "includes": []
     },
 
