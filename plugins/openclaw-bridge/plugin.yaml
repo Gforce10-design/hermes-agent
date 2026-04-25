@@ -1,0 +1,5 @@
+name: openclaw-bridge
+version: 0.1.0
+description: "Bridge `/openclaw <prompt>` slash command to local OpenClaw CLI (one-shot inference via Codex OAuth gpt-5.4)."
+author: Gforce10-design
+hooks: []
