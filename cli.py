@@ -6118,6 +6118,9 @@ class HermesCLI:
             self._handle_stop_command()
         elif canonical == "agents":
             self._handle_agents_command()
+        elif canonical == "authority":
+            from hermes_cli.authority import format_authority_report
+            self._console_print(format_authority_report())
         elif canonical == "background":
             self._handle_background_command(cmd_original)
         elif canonical == "btw":

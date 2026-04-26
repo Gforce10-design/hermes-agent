@@ -826,6 +826,45 @@ class TestTelegramMenuCommands:
         # No empty string in menu names
         assert "" not in menu_names
 
+    def test_vibe_skills_are_prioritized_when_telegram_menu_overflows(self, tmp_path, monkeypatch):
+        """Local Vibe Coding skills should remain visible when the 100-command menu overflows."""
+        from unittest.mock import patch
+        import hermes_cli.commands as commands_mod
+
+        monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+        skills_root = tmp_path / "skills"
+        skills_root.mkdir(exist_ok=True)
+        fake_skills_dir = str(skills_root)
+        fake_cmds = {}
+        for idx in range(30):
+            fake_cmds[f"/aaa-skill-{idx:02d}"] = {
+                "name": f"aaa-skill-{idx:02d}",
+                "description": "Generic skill",
+                "skill_md_path": f"{fake_skills_dir}/generic/aaa-skill-{idx:02d}/SKILL.md",
+                "skill_dir": f"{fake_skills_dir}/generic/aaa-skill-{idx:02d}",
+            }
+        for idx in range(22):
+            fake_cmds[f"/vibe-skill-{idx:02d}"] = {
+                "name": f"vibe-skill-{idx:02d}",
+                "description": "Vibe Coding skill",
+                "skill_md_path": f"{fake_skills_dir}/vibe-coding/vibe-skill-{idx:02d}/SKILL.md",
+                "skill_dir": f"{fake_skills_dir}/vibe-coding/vibe-skill-{idx:02d}",
+            }
+
+        core_commands = [(f"core{idx:02d}", "Core command") for idx in range(78)]
+        with (
+            patch.object(commands_mod, "telegram_bot_commands", return_value=core_commands),
+            patch("agent.skill_commands.get_skill_commands", return_value=fake_cmds),
+            patch("tools.skills_tool.SKILLS_DIR", skills_root),
+        ):
+            menu, hidden = telegram_menu_commands(max_commands=100)
+
+        menu_names = {n for n, _ in menu}
+        assert len(menu) == 100
+        assert hidden == 30
+        assert {f"vibe_skill_{idx:02d}" for idx in range(22)} <= menu_names
+        assert "aaa_skill_29" not in menu_names
+
 
 # ---------------------------------------------------------------------------
 # Backward-compat aliases

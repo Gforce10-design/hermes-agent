@@ -3690,6 +3690,12 @@ class GatewayRunner:
         if canonical == "agents":
             return await self._handle_agents_command(event)
 
+        if canonical == "authority":
+            return await self._handle_authority_command(event)
+
+        if canonical == "context":
+            return await self._handle_context_command(event)
+
         if canonical == "restart":
             return await self._handle_restart_command(event)
         
@@ -5266,6 +5272,66 @@ class GatewayRunner:
             lines.append("No active agents or running tasks.")
 
         return "\n".join(lines)
+
+    async def _handle_authority_command(self, event: MessageEvent) -> str:
+        """Handle /authority command - read-only authority promotion scorecard."""
+        from hermes_cli.authority import format_authority_report
+
+        return format_authority_report()
+
+    async def _handle_context_command(self, event: MessageEvent) -> str:
+        """Handle /context command - short session context status and anchors."""
+        from hermes_cli.context_status import (
+            ContextPaths,
+            display_context_path,
+            format_context_status,
+            save_context_note,
+            save_context_pin,
+        )
+
+        source = event.source
+        session_entry = self.session_store.get_or_create_session(source)
+        transcript = self.session_store.load_transcript(session_entry.session_id)
+        paths = getattr(self, "_context_paths", ContextPaths())
+        args = (event.get_command_args() or "").strip()
+
+        if not args:
+            return format_context_status(
+                source=source,
+                session_entry=session_entry,
+                transcript=transcript,
+                paths=paths,
+            )
+
+        subcommand, _, remainder = args.partition(" ")
+        subcommand = subcommand.lower().strip()
+        remainder = remainder.strip()
+
+        if subcommand == "save":
+            title = remainder or "Hermes 컨텍스트 메모"
+            note_path = save_context_note(
+                title=title,
+                source=source,
+                session_entry=session_entry,
+                transcript=transcript,
+                paths=paths,
+            )
+            return f"저장 완료: {display_context_path(note_path)}"
+
+        if subcommand == "pin":
+            if not remainder:
+                return "사용법: /context pin <파일>"
+            try:
+                pinned = save_context_pin(
+                    session_entry.session_key,
+                    remainder,
+                    paths=paths,
+                )
+            except (FileNotFoundError, PermissionError, OSError) as exc:
+                return f"앵커 저장 실패: {exc}"
+            return f"앵커 저장: {display_context_path(pinned)}"
+
+        return "사용법: /context 또는 /context save <제목> 또는 /context pin <파일>"
     
     async def _handle_stop_command(self, event: MessageEvent) -> str:
         """Handle /stop command - interrupt a running agent.

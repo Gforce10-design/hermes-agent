@@ -89,6 +89,10 @@ COMMAND_REGISTRY: list[CommandDef] = [
                args_hint="<question>"),
     CommandDef("agents", "활성 에이전트와 실행 작업 보기", "Session",
                aliases=("tasks",)),
+    CommandDef("authority", "Hermes 권한 점검 점수판 보기", "Info",
+               args_hint="[status|scorecard|policy]"),
+    CommandDef("context", "현재 채널 세션 문맥 상태/앵커/메모 관리", "Session",
+               args_hint="[save <제목>|pin <파일>]", gateway_only=True),
     CommandDef("queue", "다음 차례에 실행할 프롬프트 예약", "Session",
                aliases=("q",), args_hint="<prompt>"),
     CommandDef("steer", "다음 도구 호출 뒤 메시지 삽입", "Session",
@@ -541,6 +545,7 @@ def _collect_gateway_skill_entries(
     reserved_names: set[str],
     desc_limit: int = 100,
     sanitize_name: "Callable[[str], str] | None" = None,
+    priority_cmd_prefixes: tuple[str, ...] = (),
 ) -> tuple[list[tuple[str, str, str]], int]:
     """Collect plugin + skill entries for a gateway platform.
 
@@ -563,6 +568,9 @@ def _collect_gateway_skill_entries(
         sanitize_name: Optional name transform applied before clamping, e.g.
             :func:`_sanitize_telegram_name` for Telegram.  May return an
             empty string to signal "skip this entry".
+        priority_cmd_prefixes: Skill command prefixes that should be kept at
+            the front of the trimmed skill tier, e.g. ``("/vibe-",)`` for
+            local Vibe Coding skills in the Telegram menu.
 
     Returns:
         ``(entries, hidden_count)`` where *entries* is a list of
@@ -633,7 +641,16 @@ def _collect_gateway_skill_entries(
         pass
 
     # Clamp names; _clamp_command_names works on (name, desc) pairs so we
-    # need to zip/unzip.
+    # need to zip/unzip. Keep configured priority skill prefixes at the front
+    # of the trimmed skill tier so high-value local workflows remain visible
+    # even when Telegram's 100-command menu overflows.
+    if priority_cmd_prefixes:
+        skill_triples.sort(
+            key=lambda triple: (
+                0 if triple[2].startswith(priority_cmd_prefixes) else 1,
+                triple[2],
+            )
+        )
     skill_pairs = [(n, d) for n, d, _ in skill_triples]
     key_by_pair = {(n, d): k for n, d, k in skill_triples}
     skill_pairs = _clamp_command_names(skill_pairs, reserved_names)
@@ -657,7 +674,8 @@ def telegram_menu_commands(max_commands: int = 100) -> tuple[list[tuple[str, str
     Priority order (higher priority = never bumped by overflow):
       1. Core CommandDef commands (always included)
       2. Plugin slash commands (take precedence over skills)
-      3. Built-in skill commands (fill remaining slots, alphabetical)
+      3. Priority local skill commands (currently ``vibe-*``)
+      4. Built-in skill commands (fill remaining slots, alphabetical)
 
     Skills are the only tier that gets trimmed when the cap is hit.
     User-installed hub skills are excluded — accessible via /skills.
@@ -679,6 +697,7 @@ def telegram_menu_commands(max_commands: int = 100) -> tuple[list[tuple[str, str
         reserved_names=reserved_names,
         desc_limit=40,
         sanitize_name=_sanitize_telegram_name,
+        priority_cmd_prefixes=("/vibe-",),
     )
     # Drop the cmd_key — Telegram only needs (name, desc) pairs.
     all_commands.extend((n, d) for n, d, _k in entries)
