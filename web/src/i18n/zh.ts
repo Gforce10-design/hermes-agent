@@ -66,6 +66,7 @@ export const zh: Translations = {
       stopped: "已停止",
     },
     nav: {
+      console: "控制台",
       analytics: "分析",
       chat: "对话",
       config: "配置",

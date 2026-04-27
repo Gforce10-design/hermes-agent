@@ -191,6 +191,69 @@ class TestWebServerEndpoints:
         assert resp.json()["gateway_state"] == "startup_failed"
         assert resp.json()["gateway_platforms"] == {}
 
+    def test_get_console_overview_aggregates_control_plane_snapshot(self, monkeypatch):
+        import gateway.config as gateway_config
+        import hermes_cli.web_server as web_server
+        from hermes_state import SessionDB
+
+        class _Platform:
+            def __init__(self, value):
+                self.value = value
+
+        class _GatewayConfig:
+            def get_connected_platforms(self):
+                return [_Platform("telegram")]
+
+        db = SessionDB()
+        try:
+            db.create_session(
+                session_id="console-mvp-session",
+                source="telegram",
+                model="openai/gpt-test",
+            )
+            db.append_message(
+                "console-mvp-session",
+                role="user",
+                content="Build the Hermes Console MVP",
+            )
+        finally:
+            db.close()
+
+        monkeypatch.setattr(web_server, "get_running_pid", lambda: 4242)
+        monkeypatch.setattr(web_server, "check_config_version", lambda: (1, 1))
+        monkeypatch.setattr(
+            web_server,
+            "read_runtime_status",
+            lambda: {
+                "gateway_state": "running",
+                "updated_at": "2026-04-27T00:00:00+00:00",
+                "platforms": {"telegram": {"state": "connected", "updated_at": "2026-04-27T00:00:00+00:00"}},
+            },
+        )
+        monkeypatch.setattr(gateway_config, "load_gateway_config", lambda: _GatewayConfig())
+
+        resp = self.client.get("/api/console/overview")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"]["gateway_running"] is True
+        assert data["status"]["gateway_pid"] == 4242
+        assert data["metrics"]["recent_sessions"] >= 1
+        assert data["metrics"]["connected_platforms"] == 1
+        assert data["agents"][0]["id"] == "hermes"
+        assert data["agents"][0]["state"] == "running"
+        assert data["control_panels"][0]["id"] == "a8"
+        assert data["design_references"] == ["Linear", "Raycast", "Vercel", "Sentry", "Grafana"]
+        assert data["recent_sessions"][0]["id"] == "console-mvp-session"
+
+    def test_get_console_overview_requires_dashboard_session_token(self):
+        from starlette.testclient import TestClient
+        from hermes_cli.web_server import app
+
+        resp = TestClient(app).get("/api/console/overview")
+
+        assert resp.status_code == 401
+
     def test_get_config_schema(self):
         resp = self.client.get("/api/config/schema")
         assert resp.status_code == 200
@@ -1755,6 +1818,12 @@ class TestPtyWebSocket:
                 pass
         assert exc.value.code == 4401
 
+    def test_pty_allows_non_loopback_client_when_dashboard_is_public(self):
+        assert self.ws_module._is_pty_client_allowed("192.168.0.42", "0.0.0.0")
+
+    def test_pty_rejects_non_loopback_client_when_dashboard_is_localhost(self):
+        assert not self.ws_module._is_pty_client_allowed("192.168.0.42", "127.0.0.1")
+
     def test_streams_child_stdout_to_client(self, monkeypatch):
         monkeypatch.setattr(
             self.ws_module,
@@ -1813,7 +1882,15 @@ class TestPtyWebSocket:
             "_resolve_chat_argv",
             # sleep gives the test time to push the resize before tput runs
             lambda resume=None, sidecar_url=None: (
-                ["/bin/sh", "-c", "sleep 0.15; tput cols; tput lines"],
+                [
+                    sys.executable,
+                    "-c",
+                    "import fcntl, struct, sys, termios, time; "
+                    "time.sleep(0.15); "
+                    "rows, cols, _, _ = struct.unpack('HHHH', "
+                    "fcntl.ioctl(sys.stdin.fileno(), termios.TIOCGWINSZ, b'12345678')); "
+                    "print(cols); print(rows)",
+                ],
                 None,
                 None,
             ),
@@ -1898,6 +1975,39 @@ class TestPtyWebSocket:
         assert url.startswith("ws://127.0.0.1:9119/api/pub?")
         assert "channel=abc-123" in url
         assert "token=" in url
+
+    def test_channel_disconnect_keeps_pty_alive_for_reconnect(self, monkeypatch):
+        """Closing the browser tab must not close the Hermes chat session.
+
+        A stable channel id represents the browser's chat session. When the
+        WebSocket disconnects, the PTY child should stay alive and the next
+        connection with the same channel should reuse it instead of spawning a
+        fresh TUI, matching Telegram-style session continuity.
+        """
+        monkeypatch.setattr(
+            self.ws_module,
+            "_resolve_chat_argv",
+            lambda resume=None, sidecar_url=None: (["/bin/cat"], None, None),
+        )
+        self.ws_module._persistent_pty_sessions.clear()
+
+        with self.client.websocket_connect(self._url(channel="persist-tab")) as conn:
+            conn.send_text("first-write\n")
+            assert b"first-write" in conn.receive_bytes()
+
+        sessions = self.ws_module._persistent_pty_sessions
+        assert "persist-tab" in sessions
+        first_session = sessions["persist-tab"]
+        assert first_session.bridge.is_alive()
+
+        with self.client.websocket_connect(self._url(channel="persist-tab")) as conn:
+            conn.send_text("second-write\n")
+            assert b"second-write" in conn.receive_bytes()
+
+        assert sessions["persist-tab"] is first_session
+
+        first_session.bridge.close()
+        sessions.clear()
 
     def test_pub_broadcasts_to_events_subscribers(self, monkeypatch):
         """Frame written to /api/pub is rebroadcast verbatim to every

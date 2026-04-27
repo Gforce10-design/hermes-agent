@@ -135,6 +135,12 @@ def _require_token(request: Request) -> None:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
+def _has_valid_ws_token(ws: WebSocket) -> bool:
+    """True when a WebSocket carries the dashboard session token."""
+    token = ws.query_params.get("token", "")
+    return hmac.compare_digest(token.encode(), _SESSION_TOKEN.encode())
+
+
 # Accepted Host header values for loopback binds. DNS rebinding attacks
 # point a victim browser at an attacker-controlled hostname (evil.test)
 # which resolves to 127.0.0.1 after a TTL flip — bypassing same-origin
@@ -144,6 +150,23 @@ def _require_token(request: Request) -> None:
 _LOOPBACK_HOST_VALUES: frozenset = frozenset({
     "localhost", "127.0.0.1", "::1",
 })
+
+
+def _is_pty_client_allowed(client_host: str, bound_host: Optional[str]) -> bool:
+    """Return whether a PTY WebSocket client may connect.
+
+    Localhost-bound dashboards keep the original loopback-only PTY guard.
+    When the operator explicitly binds the dashboard to all interfaces
+    (``--insecure`` / ``0.0.0.0``) the browser may arrive through Windows
+    portproxy, LAN, or Cloudflare Tunnel with a non-loopback peer address.
+    Authentication still requires the per-page session token before this
+    check is reached.
+    """
+    if not client_host:
+        return True
+    if client_host in _LOOPBACK_HOSTS:
+        return True
+    return bound_host in ("0.0.0.0", "::")
 
 
 def _is_accepted_host(host_header: str, bound_host: str) -> bool:
@@ -338,6 +361,7 @@ _CATEGORY_MERGE: Dict[str, str] = {
     "human_delay": "display",
     "dashboard": "display",
     "code_execution": "agent",
+    "prompt_caching": "agent",
 }
 
 # Display order for tabs — unlisted categories sort alphabetically after these.
@@ -479,6 +503,46 @@ def _probe_gateway_health() -> tuple[bool, dict | None]:
         except Exception:
             continue
     return False, None
+
+
+def _console_control_panels() -> List[Dict[str, Any]]:
+    """Static first-pass Hermes Console control-plane targets.
+
+    These are non-secret UI descriptors only. Future iterations can attach
+    live health probes and guarded actions per target.
+    """
+    return [
+        {"id": "a8", "label": "A8 Max", "role": "Hermes / remote development", "state": "planned", "accent": "violet"},
+        {"id": "g3", "label": "NucBox G3", "role": "Operations server / AlphaMate", "state": "planned", "accent": "emerald"},
+        {"id": "desktop", "label": "Desktop", "role": "Primary development workstation", "state": "planned", "accent": "sky"},
+        {"id": "alphamate", "label": "AlphaMate", "role": "Financial agent fleet", "state": "planned", "accent": "amber"},
+        {"id": "claude", "label": "Claude", "role": "External coding agent", "state": "planned", "accent": "orange"},
+        {"id": "codex", "label": "Codex", "role": "OpenAI coding agent", "state": "planned", "accent": "cyan"},
+    ]
+
+
+def _console_agent_cards(status: Dict[str, Any]) -> List[Dict[str, Any]]:
+    gateway_state = status.get("gateway_state") or ("running" if status.get("gateway_running") else "stopped")
+    return [
+        {
+            "id": "hermes",
+            "label": "Hermes Agent",
+            "state": "running" if status.get("gateway_running") else "stopped",
+            "detail": f"Gateway {gateway_state}",
+        },
+        {
+            "id": "gateway",
+            "label": "Messaging Gateway",
+            "state": gateway_state,
+            "detail": f"{len(status.get('gateway_platforms') or {})} connected platform(s)",
+        },
+        {
+            "id": "sessions",
+            "label": "Session Store",
+            "state": "active" if status.get("active_sessions", 0) else "idle",
+            "detail": f"{status.get('active_sessions', 0)} active session(s)",
+        },
+    ]
 
 
 @app.get("/api/status")
@@ -716,6 +780,33 @@ async def get_action_status(name: str, lines: int = 200):
         "exit_code": exit_code,
         "pid": pid,
         "lines": tail,
+    }
+
+
+@app.get("/api/console/overview")
+async def get_console_overview():
+    """Return the Hermes Console MVP snapshot.
+
+    Aggregates existing dashboard data into a command-center oriented shape:
+    status cards, recent sessions, design references, and first-pass control
+    panel targets. The endpoint intentionally returns no secrets.
+    """
+    status = await get_status()
+    sessions_payload = await get_sessions(limit=5, offset=0)
+    sessions = sessions_payload.get("sessions", []) if isinstance(sessions_payload, dict) else []
+    platforms = status.get("gateway_platforms") or {}
+    return {
+        "status": status,
+        "metrics": {
+            "active_sessions": status.get("active_sessions", 0),
+            "recent_sessions": len(sessions),
+            "connected_platforms": sum(1 for p in platforms.values() if p.get("state") == "connected"),
+            "control_targets": len(_console_control_panels()),
+        },
+        "agents": _console_agent_cards(status),
+        "control_panels": _console_control_panels(),
+        "recent_sessions": sessions,
+        "design_references": ["Linear", "Raycast", "Vercel", "Sentry", "Grafana"],
     }
 
 
@@ -2271,6 +2362,95 @@ async def get_usage_analytics(days: int = 30):
         db.close()
 
 
+async def _run_mobile_prompt(prompt: str, session_id: Optional[str] = None) -> Dict[str, Any]:
+    """Run one Hermes prompt for the mobile WebSocket API.
+
+    The mobile MVP uses a structured JSON contract rather than PTY bytes.  We
+    return the complete response as a single delta now; the contract leaves room
+    to stream finer-grained deltas later without changing the Flutter client.
+    """
+    from run_agent import AIAgent
+
+    def _run() -> Dict[str, Any]:
+        agent = AIAgent(
+            quiet_mode=True,
+            platform="mobile",
+            session_id=session_id,
+        )
+        result = agent.run_conversation(prompt)
+        if isinstance(result, dict):
+            text = str(result.get("final_response") or result.get("response") or "")
+        else:
+            text = str(result)
+        return {
+            "session_id": getattr(agent, "session_id", None) or session_id,
+            "text": text,
+            "model": getattr(agent, "model", None),
+        }
+
+    return await asyncio.to_thread(_run)
+
+
+async def _send_mobile_error(ws: WebSocket, message: str) -> None:
+    await ws.send_json({"type": "error", "message": message})
+
+
+@app.websocket("/api/mobile/ws")
+async def mobile_ws(ws: WebSocket) -> None:
+    """Structured JSON WebSocket for native mobile clients."""
+    if not _has_valid_ws_token(ws):
+        await ws.close(code=4401)
+        return
+
+    await ws.accept()
+
+    try:
+        while True:
+            try:
+                payload = await ws.receive_json()
+            except WebSocketDisconnect:
+                return
+            except Exception:
+                await _send_mobile_error(ws, "Invalid JSON message")
+                return
+
+            msg_type = payload.get("type") if isinstance(payload, dict) else None
+            if msg_type != "prompt.submit":
+                await _send_mobile_error(ws, f"Unsupported mobile message type: {msg_type}")
+                return
+
+            text = str(payload.get("text") or "").strip()
+            if not text:
+                await _send_mobile_error(ws, "prompt.submit requires non-empty text")
+                return
+
+            session_id = payload.get("session_id")
+            if session_id is not None:
+                session_id = str(session_id)
+
+            await ws.send_json({"type": "message.start", "session_id": session_id})
+            try:
+                result = await _run_mobile_prompt(text, session_id=session_id)
+            except Exception:
+                _log.exception("Mobile prompt failed")
+                await _send_mobile_error(ws, "Mobile prompt failed")
+                continue
+
+            response_text = str(result.get("text") or "")
+            await ws.send_json({"type": "message.delta", "text": response_text})
+            await ws.send_json({
+                "type": "message.complete",
+                "session_id": result.get("session_id") or session_id,
+                "text": response_text,
+                "model": result.get("model"),
+            })
+    finally:
+        try:
+            await ws.close()
+        except Exception:
+            pass
+
+
 # ---------------------------------------------------------------------------
 # /api/pty — PTY-over-WebSocket bridge for the dashboard "Chat" tab.
 #
@@ -2293,6 +2473,7 @@ from hermes_cli.pty_bridge import PtyBridge, PtyUnavailableError
 _RESIZE_RE = re.compile(rb"\x1b\[RESIZE:(\d+);(\d+)\]")
 _PTY_READ_CHUNK_TIMEOUT = 0.2
 _VALID_CHANNEL_RE = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
+_PERSISTENT_PTY_IDLE_TTL_SECONDS = 8 * 60 * 60
 # Starlette's TestClient reports the peer as "testclient"; treat it as
 # loopback so tests don't need to rewrite request scope.
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost", "testclient"})
@@ -2303,6 +2484,30 @@ _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost", "testclient"})
 # drops AND the publisher has disconnected.
 _event_channels: dict[str, set] = {}
 _event_lock = asyncio.Lock()
+
+
+class _PersistentPtySession:
+    """Server-side PTY session that survives browser tab disconnects."""
+
+    def __init__(self, bridge: PtyBridge):
+        self.bridge = bridge
+        self.attached = False
+        self.last_detached_at = time.monotonic()
+
+
+_persistent_pty_sessions: dict[str, _PersistentPtySession] = {}
+
+
+def _prune_persistent_pty_sessions(now: Optional[float] = None) -> None:
+    """Close stale/dead detached PTY sessions from the dashboard chat cache."""
+    current = time.monotonic() if now is None else now
+    for key, session in list(_persistent_pty_sessions.items()):
+        if session.attached:
+            continue
+        expired = current - session.last_detached_at > _PERSISTENT_PTY_IDLE_TTL_SECONDS
+        if expired or not session.bridge.is_alive():
+            session.bridge.close()
+            _persistent_pty_sessions.pop(key, None)
 
 
 def _resolve_chat_argv(
@@ -2390,36 +2595,69 @@ async def pty_ws(ws: WebSocket) -> None:
         return
 
     client_host = ws.client.host if ws.client else ""
-    if client_host and client_host not in _LOOPBACK_HOSTS:
+    bound_host = getattr(app.state, "bound_host", None)
+    if not _is_pty_client_allowed(client_host, bound_host):
+        _log.warning(
+            "Rejecting PTY WebSocket from non-local client host=%s bound_host=%s",
+            client_host,
+            bound_host,
+        )
         await ws.close(code=4403)
         return
 
     await ws.accept()
 
-    # --- spawn PTY ------------------------------------------------------
+    # --- spawn/reuse PTY -----------------------------------------------
     resume = ws.query_params.get("resume") or None
     channel = _channel_or_close_code(ws)
     sidecar_url = _build_sidecar_url(channel) if channel else None
+    persistent_session: Optional[_PersistentPtySession] = None
+    owns_bridge = True
 
-    try:
-        argv, cwd, env = _resolve_chat_argv(resume=resume, sidecar_url=sidecar_url)
-    except SystemExit as exc:
-        # _make_tui_argv calls sys.exit(1) when node/npm is missing.
-        await ws.send_text(f"\r\n\x1b[31mChat unavailable: {exc}\x1b[0m\r\n")
-        await ws.close(code=1011)
-        return
+    _prune_persistent_pty_sessions()
 
+    if channel:
+        existing = _persistent_pty_sessions.get(channel)
+        if existing and existing.bridge.is_alive():
+            if existing.attached:
+                await ws.send_text("\r\n\x1b[31mChat session is already open in another tab.\x1b[0m\r\n")
+                await ws.close(code=4409)
+                return
+            persistent_session = existing
+            bridge = existing.bridge
+            owns_bridge = False
+        elif existing:
+            existing.bridge.close()
+            _persistent_pty_sessions.pop(channel, None)
+            existing = None
 
-    try:
-        bridge = PtyBridge.spawn(argv, cwd=cwd, env=env)
-    except PtyUnavailableError as exc:
-        await ws.send_text(f"\r\n\x1b[31mChat unavailable: {exc}\x1b[0m\r\n")
-        await ws.close(code=1011)
-        return
-    except (FileNotFoundError, OSError) as exc:
-        await ws.send_text(f"\r\n\x1b[31mChat failed to start: {exc}\x1b[0m\r\n")
-        await ws.close(code=1011)
-        return
+    if persistent_session is None:
+        try:
+            argv, cwd, env = _resolve_chat_argv(resume=resume, sidecar_url=sidecar_url)
+        except SystemExit as exc:
+            # _make_tui_argv calls sys.exit(1) when node/npm is missing.
+            await ws.send_text(f"\r\n\x1b[31mChat unavailable: {exc}\x1b[0m\r\n")
+            await ws.close(code=1011)
+            return
+
+        try:
+            bridge = PtyBridge.spawn(argv, cwd=cwd, env=env)
+        except PtyUnavailableError as exc:
+            await ws.send_text(f"\r\n\x1b[31mChat unavailable: {exc}\x1b[0m\r\n")
+            await ws.close(code=1011)
+            return
+        except (FileNotFoundError, OSError) as exc:
+            await ws.send_text(f"\r\n\x1b[31mChat failed to start: {exc}\x1b[0m\r\n")
+            await ws.close(code=1011)
+            return
+
+        if channel:
+            persistent_session = _PersistentPtySession(bridge)
+            _persistent_pty_sessions[channel] = persistent_session
+            owns_bridge = False
+
+    if persistent_session is not None:
+        persistent_session.attached = True
 
     loop = asyncio.get_running_loop()
 
@@ -2472,7 +2710,16 @@ async def pty_ws(ws: WebSocket) -> None:
             await reader_task
         except (asyncio.CancelledError, Exception):
             pass
-        bridge.close()
+        if owns_bridge:
+            bridge.close()
+        elif persistent_session is not None:
+            if bridge.is_alive():
+                persistent_session.attached = False
+                persistent_session.last_detached_at = time.monotonic()
+            else:
+                bridge.close()
+                if channel:
+                    _persistent_pty_sessions.pop(channel, None)
 
 
 # ---------------------------------------------------------------------------

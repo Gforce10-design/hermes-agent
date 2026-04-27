@@ -45,14 +45,24 @@ function buildWsUrl(
 }
 
 // Channel id ties this chat tab's PTY child (publisher) to its sidebar
-// (subscriber).  Generated once per mount so a tab refresh starts a fresh
-// channel — the previous PTY child terminates with the old WS, and its
-// channel auto-evicts when no subscribers remain.
+// (subscriber). It is persisted so closing/reopening the browser tab reattaches
+// to the same server-side PTY instead of terminating the Hermes conversation.
+const CHAT_CHANNEL_STORAGE_KEY = "hermes.chat.persistentChannel";
+
 function generateChannelId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
   }
   return `chat-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
+}
+
+function getOrCreatePersistentChannelId(): string {
+  if (typeof window === "undefined") return generateChannelId();
+  const existing = window.localStorage.getItem(CHAT_CHANNEL_STORAGE_KEY);
+  if (existing) return existing;
+  const created = generateChannelId();
+  window.localStorage.setItem(CHAT_CHANNEL_STORAGE_KEY, created);
+  return created;
 }
 
 // Colors for the terminal body.  Matches the dashboard's dark teal canvas
@@ -133,7 +143,7 @@ export default function ChatPage() {
   );
 
   const resumeRef = useRef<string | null>(searchParams.get("resume"));
-  const channel = useMemo(() => generateChannelId(), []);
+  const channel = useMemo(() => getOrCreatePersistentChannelId(), []);
 
   useEffect(() => {
     const mql = window.matchMedia("(max-width: 1023px)");

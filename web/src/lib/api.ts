@@ -45,6 +45,7 @@ async function getSessionToken(): Promise<string> {
 
 export const api = {
   getStatus: () => fetchJSON<StatusResponse>("/api/status"),
+  getConsoleOverview: () => fetchJSON<ConsoleOverview>("/api/console/overview"),
   getSessions: (limit = 20, offset = 0) =>
     fetchJSON<PaginatedSessions>(`/api/sessions?limit=${limit}&offset=${offset}`),
   getSessionMessages: (id: string) =>
@@ -272,6 +273,35 @@ export interface SessionInfo {
   input_tokens: number;
   output_tokens: number;
   preview: string | null;
+}
+
+export interface ConsoleAgentInfo {
+  id: string;
+  label: string;
+  state: string;
+  detail: string;
+}
+
+export interface ConsoleControlPanel {
+  id: string;
+  label: string;
+  role: string;
+  state: string;
+  accent: string;
+}
+
+export interface ConsoleOverview {
+  status: StatusResponse;
+  metrics: {
+    active_sessions: number;
+    recent_sessions: number;
+    connected_platforms: number;
+    control_targets: number;
+  };
+  agents: ConsoleAgentInfo[];
+  control_panels: ConsoleControlPanel[];
+  recent_sessions: SessionInfo[];
+  design_references: string[];
 }
 
 export interface PaginatedSessions {

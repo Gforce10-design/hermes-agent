@@ -4,6 +4,7 @@ import {
   useMemo,
   useState,
   type ComponentType,
+  type MouseEvent,
   type ReactNode,
 } from "react";
 import {
@@ -50,6 +51,7 @@ import { SidebarStatusStrip } from "@/components/SidebarStatusStrip";
 import { PageHeaderProvider } from "@/contexts/PageHeaderProvider";
 import { useSystemActions } from "@/contexts/useSystemActions";
 import type { SystemAction } from "@/contexts/system-actions-context";
+import ConsolePage from "@/pages/ConsolePage";
 import ConfigPage from "@/pages/ConfigPage";
 import DocsPage from "@/pages/DocsPage";
 import EnvPage from "@/pages/EnvPage";
@@ -66,9 +68,10 @@ import { PluginPage, PluginSlot, usePlugins } from "@/plugins";
 import type { PluginManifest } from "@/plugins";
 import { useTheme } from "@/themes";
 import { isDashboardEmbeddedChatEnabled } from "@/lib/dashboard-flags";
+import { api } from "@/lib/api";
 
 function RootRedirect() {
-  return <Navigate to="/sessions" replace />;
+  return <Navigate to="/console" replace />;
 }
 
 const CHAT_NAV_ITEM: NavItem = {
@@ -81,6 +84,7 @@ const CHAT_NAV_ITEM: NavItem = {
 /** Built-in routes except /chat (only with `hermes dashboard --tui`). */
 const BUILTIN_ROUTES_CORE: Record<string, ComponentType> = {
   "/": RootRedirect,
+  "/console": ConsolePage,
   "/sessions": SessionsPage,
   "/analytics": AnalyticsPage,
   "/logs": LogsPage,
@@ -92,6 +96,12 @@ const BUILTIN_ROUTES_CORE: Record<string, ComponentType> = {
 };
 
 const BUILTIN_NAV_REST: NavItem[] = [
+  {
+    path: "/console",
+    labelKey: "console",
+    label: "콘솔",
+    icon: Activity,
+  },
   {
     path: "/sessions",
     labelKey: "sessions",
@@ -242,6 +252,7 @@ export default function App() {
   const { pathname } = useLocation();
   const { manifests } = usePlugins();
   const { theme } = useTheme();
+  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const closeMobile = useCallback(() => setMobileOpen(false), []);
   const isDocsRoute = pathname === "/docs" || pathname === "/docs/";
@@ -306,6 +317,39 @@ export default function App() {
     mql.addEventListener("change", onChange);
     return () => mql.removeEventListener("change", onChange);
   }, []);
+
+  const handleSidebarChatNav = useCallback(
+    async (event: MouseEvent<HTMLAnchorElement>) => {
+      closeMobile();
+
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.shiftKey
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+
+      try {
+        const payload = await api.getSessions(1, 0);
+        const sessionId = payload.sessions?.[0]?.id;
+        if (sessionId) {
+          navigate(`/chat?resume=${encodeURIComponent(sessionId)}`);
+          return;
+        }
+      } catch {
+        // If the session lookup fails, fall back to opening a fresh chat.
+      }
+
+      navigate("/chat");
+    },
+    [closeMobile, navigate],
+  );
 
   return (
     <div
@@ -430,7 +474,9 @@ export default function App() {
                       <NavLink
                         to={path}
                         end={path === "/sessions"}
-                        onClick={closeMobile}
+                        onClick={
+                          path === "/chat" ? handleSidebarChatNav : closeMobile
+                        }
                         className={({ isActive }) =>
                           cn(
                             "group relative flex items-center gap-3",

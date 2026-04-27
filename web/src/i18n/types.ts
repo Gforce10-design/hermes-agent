@@ -67,6 +67,7 @@ export interface Translations {
       stopped: string;
     };
     nav: {
+      console: string;
       analytics: string;
       chat: string;
       config: string;

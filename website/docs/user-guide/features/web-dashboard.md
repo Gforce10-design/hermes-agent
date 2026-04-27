@@ -49,6 +49,20 @@ When you run `hermes dashboard` without the dependencies, it will tell you what 
 
 ## Pages
 
+### Console
+
+The **Console** page is the command-center landing page for Hermes. It adapts patterns from Linear, Raycast, Vercel, Sentry, and Grafana into a Hermes-specific control plane rather than cloning any one product.
+
+The first MVP shows:
+
+- **Command-center metrics** — active sessions, recent sessions, connected platforms, and control targets
+- **Agent Stack** — Hermes Agent, Messaging Gateway, and Session Store state cards
+- **Gateway Snapshot** — state, PID, and Hermes home path
+- **Control Panels** — first-pass targets for A8, G3, Desktop, AlphaMate, Claude, and Codex
+- **Recent Sessions** — the most recent sessions from the local session store
+
+The backend endpoint is `GET /api/console/overview`. It requires the dashboard session token and intentionally returns no secrets.
+
 ### Status
 
 The landing page shows a live overview of your installation:
@@ -196,6 +210,10 @@ The web dashboard exposes a REST API that the frontend consumes. You can also ca
 ### GET /api/status
 
 Returns agent version, gateway status, platform states, and active session count.
+
+### GET /api/console/overview
+
+Returns the Console MVP aggregate: status, command-center metrics, agent cards, first-pass control panel targets, recent sessions, and design reference names. This endpoint is dashboard-session-token protected.
 
 ### GET /api/sessions
 
