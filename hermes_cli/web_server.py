@@ -2550,10 +2550,56 @@ def _has_valid_mobile_access_headers(request: Request) -> bool:
     )
 
 
+def _cloudflare_access_audience() -> str:
+    return (
+        os.environ.get("HERMES_CLOUDFLARE_ACCESS_AUD")
+        or os.environ.get("CLOUDFLARE_ACCESS_AUD")
+        or os.environ.get("CF_ACCESS_AUD")
+        or ""
+    ).strip()
+
+
+def _has_valid_cloudflare_access_assertion(request: Request) -> bool:
+    """Validate the Cloudflare Access JWT forwarded to the origin."""
+    assertion = request.headers.get("Cf-Access-Jwt-Assertion", "").strip()
+    if not assertion:
+        return False
+    try:
+        import jwt
+
+        unverified = jwt.decode(assertion, options={"verify_signature": False})
+        issuer = str(unverified.get("iss") or "").rstrip("/")
+        parsed = urllib.parse.urlparse(issuer)
+        if parsed.scheme != "https" or not parsed.netloc.endswith(".cloudflareaccess.com"):
+            return False
+        jwks_url = f"{issuer}/cdn-cgi/access/certs"
+        signing_key = jwt.PyJWKClient(jwks_url).get_signing_key_from_jwt(assertion).key
+        audience = _cloudflare_access_audience()
+        options = {"require": ["exp", "iss"]}
+        if not audience:
+            options["verify_aud"] = False
+        jwt.decode(
+            assertion,
+            signing_key,
+            algorithms=["RS256"],
+            audience=audience or None,
+            issuer=issuer,
+            options=options,
+        )
+        return True
+    except Exception as exc:
+        _log.info("Cloudflare Access assertion rejected: %s", exc.__class__.__name__)
+        return False
+
+
 @app.get("/api/mobile/bootstrap")
 async def mobile_bootstrap(request: Request) -> Dict[str, Any]:
     """Return the native mobile WebSocket URL without exposing it to anonymous callers."""
-    if not (_has_valid_session_token(request) or _has_valid_mobile_access_headers(request)):
+    if not (
+        _has_valid_session_token(request)
+        or _has_valid_mobile_access_headers(request)
+        or _has_valid_cloudflare_access_assertion(request)
+    ):
         raise HTTPException(status_code=401, detail="Unauthorized")
     return {"mobile_ws_url": f"/api/mobile/ws?token={_SESSION_TOKEN}"}
 

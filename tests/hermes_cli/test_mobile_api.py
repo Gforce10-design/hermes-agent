@@ -63,6 +63,27 @@ class TestMobileWebSocket:
             assert conn.receive_json()["type"] == "message.delta"
             assert conn.receive_json()["type"] == "message.complete"
 
+    def test_mobile_bootstrap_accepts_valid_cloudflare_access_assertion(self, monkeypatch):
+        monkeypatch.setattr(self.web_server, "_has_valid_cloudflare_access_assertion", lambda request: True)
+
+        resp = self.client.get(
+            "/api/mobile/bootstrap",
+            headers={"Cf-Access-Jwt-Assertion": "signed-cloudflare-access-jwt"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["mobile_ws_url"].startswith("/api/mobile/ws?token=")
+
+    def test_mobile_bootstrap_rejects_invalid_cloudflare_access_assertion(self, monkeypatch):
+        monkeypatch.setattr(self.web_server, "_has_valid_cloudflare_access_assertion", lambda request: False)
+
+        resp = self.client.get(
+            "/api/mobile/bootstrap",
+            headers={"Cf-Access-Jwt-Assertion": "invalid-cloudflare-access-jwt"},
+        )
+
+        assert resp.status_code == 401
+
     def test_mobile_app_update_returns_latest_apk_metadata(self):
         resp = self.client.get("/api/mobile/app-update")
 
