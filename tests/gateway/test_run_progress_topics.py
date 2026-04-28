@@ -65,6 +65,11 @@ class NonEditingProgressCaptureAdapter(ProgressCaptureAdapter):
         raise AssertionError("non-editable adapters should not receive edit_message calls")
 
 
+class MarkdownExpandingProgressCaptureAdapter(ProgressCaptureAdapter):
+    def format_message(self, content: str) -> str:
+        return content.replace("_", "\\_")
+
+
 class FakeAgent:
     def __init__(self, **kwargs):
         self.tool_progress_callback = kwargs.get("tool_progress_callback")
@@ -196,12 +201,13 @@ async def test_run_agent_progress_stays_in_originating_topic(monkeypatch, tmp_pa
     assert adapter.sent == [
         {
             "chat_id": "-1001",
-            "content": '💻 terminal: "pwd"',
+            "content": "상태: 접수\n요청을 확인했습니다.",
             "reply_to": None,
             "metadata": {"thread_id": "17585"},
         }
     ]
     assert adapter.edits
+    assert adapter.edits[-1]["content"] == "상태: 완료\n\ndone"
     assert all(call["metadata"] == {"thread_id": "17585"} for call in adapter.typing)
 
 
@@ -349,15 +355,11 @@ def test_all_mode_default_truncation_40_chars(monkeypatch, tmp_path):
     adapter, result = _run_long_preview_helper(monkeypatch, tmp_path, preview_length=0)
     assert result["final_response"] == "done"
     assert adapter.sent
-    content = adapter.sent[0]["content"]
-    # The long command should be truncated — total preview <= 40 chars
-    assert "..." in content
-    # Extract the preview part between quotes
-    import re
-    match = re.search(r'"(.+)"', content)
-    assert match, f"No quoted preview found in: {content}"
-    preview_text = match.group(1)
-    assert len(preview_text) <= 40, f"Preview too long ({len(preview_text)}): {preview_text}"
+    visible = "\n".join([adapter.sent[0]["content"], *(call["content"] for call in adapter.edits)])
+    assert '상태: 접수' in visible
+    assert '상태: 진행' in visible
+    assert '상태: 완료' in visible
+    assert LongPreviewAgent.LONG_CMD not in visible
 
 
 def test_all_mode_respects_custom_preview_length(monkeypatch, tmp_path):
@@ -365,16 +367,9 @@ def test_all_mode_respects_custom_preview_length(monkeypatch, tmp_path):
     adapter, result = _run_long_preview_helper(monkeypatch, tmp_path, preview_length=120)
     assert result["final_response"] == "done"
     assert adapter.sent
-    content = adapter.sent[0]["content"]
-    # With 120-char cap, the command (165 chars) should still be truncated but longer
-    import re
-    match = re.search(r'"(.+)"', content)
-    assert match, f"No quoted preview found in: {content}"
-    preview_text = match.group(1)
-    # Should be longer than the 40-char default
-    assert len(preview_text) > 40, f"Preview suspiciously short ({len(preview_text)}): {preview_text}"
-    # But still capped at 120
-    assert len(preview_text) <= 120, f"Preview too long ({len(preview_text)}): {preview_text}"
+    visible = "\n".join([adapter.sent[0]["content"], *(call["content"] for call in adapter.edits)])
+    assert '상태: 진행' in visible
+    assert LongPreviewAgent.LONG_CMD not in visible
 
 
 def test_all_mode_no_truncation_when_preview_fits(monkeypatch, tmp_path):
@@ -383,9 +378,9 @@ def test_all_mode_no_truncation_when_preview_fits(monkeypatch, tmp_path):
     adapter, result = _run_long_preview_helper(monkeypatch, tmp_path, preview_length=200)
     assert result["final_response"] == "done"
     assert adapter.sent
-    content = adapter.sent[0]["content"]
-    # With a 200-char cap, the 165-char command should NOT be truncated
-    assert "..." not in content, f"Preview was truncated when it shouldn't be: {content}"
+    visible = "\n".join([adapter.sent[0]["content"], *(call["content"] for call in adapter.edits)])
+    assert '상태: 완료' in visible
+    assert LongPreviewAgent.LONG_CMD not in visible
 
 
 class CommentaryAgent:
@@ -476,6 +471,39 @@ class BackgroundReviewAgent:
         }
 
 
+class SingleStatusCardAgent:
+    final_response = "완료 응답입니다."
+
+    def __init__(self, **kwargs):
+        self.tool_progress_callback = kwargs.get("tool_progress_callback")
+        self.interim_assistant_callback = kwargs.get("interim_assistant_callback")
+        self.tools = []
+
+    def run_conversation(self, message, conversation_history=None, task_id=None):
+        if self.interim_assistant_callback:
+            self.interim_assistant_callback("I'll inspect the repo first.", already_streamed=False)
+        if self.tool_progress_callback:
+            self.tool_progress_callback("tool.started", "terminal", "pwd", {})
+        time.sleep(0.35)
+        return {
+            "final_response": self.final_response,
+            "messages": [],
+            "api_calls": 1,
+        }
+
+
+class MediaResponseAgent(SingleStatusCardAgent):
+    final_response = "MEDIA:/tmp/report.png"
+
+
+class MarkdownHeavyResponseAgent(SingleStatusCardAgent):
+    final_response = "_" * 2100
+
+
+class EmojiHeavyResponseAgent(SingleStatusCardAgent):
+    final_response = "🧪" * 2100
+
+
 class VerboseAgent:
     """Agent that emits a tool call with args whose JSON exceeds 200 chars."""
     LONG_CODE = "x" * 300
@@ -560,6 +588,76 @@ async def _run_with_agent(
 
 
 @pytest.mark.asyncio
+async def test_telegram_uses_single_status_card_for_receipt_progress_and_final(monkeypatch, tmp_path):
+    adapter, result = await _run_with_agent(
+        monkeypatch,
+        tmp_path,
+        SingleStatusCardAgent,
+        session_id="sess-single-status-card",
+        config_data={"display": {"tool_progress": "all", "interim_assistant_messages": True}},
+    )
+
+    assert result["final_response"] == "완료 응답입니다."
+    assert result.get("already_sent") is True
+    assert len(adapter.sent) == 1
+    assert adapter.sent[0]["content"] == "상태: 접수\n요청을 확인했습니다."
+    assert adapter.edits
+    assert any(call["content"] == "상태: 진행\n작업을 진행 중입니다." for call in adapter.edits)
+    assert adapter.edits[-1]["content"] == "상태: 완료\n\n완료 응답입니다."
+    visible = "\n".join([adapter.sent[0]["content"], *(call["content"] for call in adapter.edits)])
+    assert "terminal" not in visible
+    assert "pwd" not in visible
+    assert "I'll inspect" not in visible
+
+
+@pytest.mark.asyncio
+async def test_telegram_single_status_card_marks_complete_when_final_sent_separately(monkeypatch, tmp_path):
+    adapter, result = await _run_with_agent(
+        monkeypatch,
+        tmp_path,
+        MediaResponseAgent,
+        session_id="sess-single-status-media",
+        config_data={"display": {"tool_progress": "all", "interim_assistant_messages": True}},
+    )
+
+    assert result["final_response"] == "MEDIA:/tmp/report.png"
+    assert result.get("already_sent") is not True
+    assert adapter.sent[0]["content"] == "상태: 접수\n요청을 확인했습니다."
+    assert adapter.edits[-1]["content"] == "상태: 완료\n응답은 별도 메시지로 전송합니다."
+
+
+@pytest.mark.asyncio
+async def test_telegram_single_status_card_avoids_markdown_expansion_truncation(monkeypatch, tmp_path):
+    adapter, result = await _run_with_agent(
+        monkeypatch,
+        tmp_path,
+        MarkdownHeavyResponseAgent,
+        session_id="sess-single-status-markdown-heavy",
+        config_data={"display": {"tool_progress": "all", "interim_assistant_messages": True}},
+        adapter_cls=MarkdownExpandingProgressCaptureAdapter,
+    )
+
+    assert result["final_response"] == "_" * 2100
+    assert result.get("already_sent") is not True
+    assert adapter.edits[-1]["content"] == "상태: 완료\n응답은 별도 메시지로 전송합니다."
+
+
+@pytest.mark.asyncio
+async def test_telegram_single_status_card_uses_utf16_length_for_final_embed(monkeypatch, tmp_path):
+    adapter, result = await _run_with_agent(
+        monkeypatch,
+        tmp_path,
+        EmojiHeavyResponseAgent,
+        session_id="sess-single-status-emoji-heavy",
+        config_data={"display": {"tool_progress": "all", "interim_assistant_messages": True}},
+    )
+
+    assert result["final_response"] == "🧪" * 2100
+    assert result.get("already_sent") is not True
+    assert adapter.edits[-1]["content"] == "상태: 완료\n응답은 별도 메시지로 전송합니다."
+
+
+@pytest.mark.asyncio
 async def test_run_agent_surfaces_real_interim_commentary(monkeypatch, tmp_path):
     adapter, result = await _run_with_agent(
         monkeypatch,
@@ -569,8 +667,10 @@ async def test_run_agent_surfaces_real_interim_commentary(monkeypatch, tmp_path)
         config_data={"display": {"interim_assistant_messages": True}},
     )
 
-    assert result.get("already_sent") is not True
-    assert any(call["content"] == "I'll inspect the repo first." for call in adapter.sent)
+    assert result.get("already_sent") is True
+    visible = "\n".join([*(call["content"] for call in adapter.sent), *(call["content"] for call in adapter.edits)])
+    assert "I'll inspect the repo first." not in visible
+    assert "상태: 완료" in visible
 
 
 @pytest.mark.asyncio
@@ -582,7 +682,9 @@ async def test_run_agent_surfaces_interim_commentary_by_default(monkeypatch, tmp
         session_id="sess-commentary-default-on",
     )
 
-    assert any(call["content"] == "I'll inspect the repo first." for call in adapter.sent)
+    visible = "\n".join([*(call["content"] for call in adapter.sent), *(call["content"] for call in adapter.edits)])
+    assert "I'll inspect the repo first." not in visible
+    assert "상태: 완료" in visible
 
 
 @pytest.mark.asyncio
@@ -595,8 +697,10 @@ async def test_run_agent_suppresses_interim_commentary_when_disabled(monkeypatch
         config_data={"display": {"interim_assistant_messages": False}},
     )
 
-    assert result.get("already_sent") is not True
-    assert not any(call["content"] == "I'll inspect the repo first." for call in adapter.sent)
+    assert result.get("already_sent") is True
+    visible = "\n".join([*(call["content"] for call in adapter.sent), *(call["content"] for call in adapter.edits)])
+    assert "I'll inspect the repo first." not in visible
+    assert "상태: 완료" in visible
 
 
 @pytest.mark.asyncio
@@ -610,8 +714,10 @@ async def test_run_agent_tool_progress_does_not_control_interim_commentary(monke
         config_data={"display": {"tool_progress": "all", "interim_assistant_messages": False}},
     )
 
-    assert result.get("already_sent") is not True
-    assert not any(call["content"] == "I'll inspect the repo first." for call in adapter.sent)
+    assert result.get("already_sent") is True
+    visible = "\n".join([*(call["content"] for call in adapter.sent), *(call["content"] for call in adapter.edits)])
+    assert "I'll inspect the repo first." not in visible
+    assert "상태: 완료" in visible
 
 
 @pytest.mark.asyncio
@@ -650,9 +756,10 @@ async def test_display_streaming_does_not_enable_gateway_streaming(monkeypatch, 
         },
     )
 
-    assert result.get("already_sent") is not True
-    assert adapter.edits == []
-    assert [call["content"] for call in adapter.sent] == ["I'll inspect the repo first."]
+    assert result.get("already_sent") is True
+    visible = "\n".join([*(call["content"] for call in adapter.sent), *(call["content"] for call in adapter.edits)])
+    assert "I'll inspect the repo first." not in visible
+    assert "상태: 완료" in visible
 
 
 @pytest.mark.asyncio
@@ -670,8 +777,10 @@ async def test_run_agent_interim_commentary_works_with_tool_progress_off(monkeyp
         },
     )
 
-    assert result.get("already_sent") is not True
-    assert any(call["content"] == "I'll inspect the repo first." for call in adapter.sent)
+    assert result.get("already_sent") is True
+    visible = "\n".join([*(call["content"] for call in adapter.sent), *(call["content"] for call in adapter.edits)])
+    assert "I'll inspect the repo first." not in visible
+    assert "상태: 완료" in visible
 
 
 @pytest.mark.asyncio
@@ -705,7 +814,8 @@ async def test_run_agent_previewed_final_marks_already_sent(monkeypatch, tmp_pat
     )
 
     assert result.get("already_sent") is True
-    assert [call["content"] for call in adapter.sent] == ["You're welcome."]
+    assert adapter.sent[0]["content"] == "상태: 접수\n요청을 확인했습니다."
+    assert adapter.edits[-1]["content"] == "상태: 완료\n\nYou're welcome."
 
 
 @pytest.mark.asyncio
@@ -746,8 +856,9 @@ async def test_run_agent_queued_message_does_not_treat_commentary_as_final(monke
 
     sent_texts = [call["content"] for call in adapter.sent]
     assert result["final_response"] == "final response 2"
-    assert "I'll inspect the repo first." in sent_texts
-    assert "final response 1" in sent_texts
+    visible = "\n".join([*sent_texts, *(call["content"] for call in adapter.edits)])
+    assert "I'll inspect the repo first." not in visible
+    assert "상태: 완료\n\nfinal response 1" in visible or "final response 1" in sent_texts
 
 
 @pytest.mark.asyncio
@@ -761,7 +872,7 @@ async def test_run_agent_defers_background_review_notification_until_release(mon
     )
 
     assert result["final_response"] == "done"
-    assert adapter.sent == []
+    assert adapter.sent == [{"chat_id": "-1001", "content": "상태: 접수\n요청을 확인했습니다.", "reply_to": None, "metadata": {"thread_id": "17585"}}]
 
 
 @pytest.mark.asyncio
@@ -974,10 +1085,10 @@ async def test_verbose_mode_does_not_truncate_args_by_default(monkeypatch, tmp_p
     )
 
     assert result["final_response"] == "done"
-    # The full 300-char 'x' string should be present, not truncated to 200
     all_content = " ".join(call["content"] for call in adapter.sent)
     all_content += " ".join(call["content"] for call in adapter.edits)
-    assert VerboseAgent.LONG_CODE in all_content
+    assert "상태: 진행" in all_content
+    assert VerboseAgent.LONG_CODE not in all_content
 
 
 @pytest.mark.asyncio
@@ -994,7 +1105,5 @@ async def test_verbose_mode_respects_explicit_tool_preview_length(monkeypatch, t
     assert result["final_response"] == "done"
     all_content = " ".join(call["content"] for call in adapter.sent)
     all_content += " ".join(call["content"] for call in adapter.edits)
-    # Should be truncated — full 300-char string NOT present
+    assert "상태: 진행" in all_content
     assert VerboseAgent.LONG_CODE not in all_content
-    # But should still contain the truncated portion with "..."
-    assert "..." in all_content

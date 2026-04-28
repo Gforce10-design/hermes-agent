@@ -290,6 +290,7 @@ from gateway.platforms.base import (
     MessageEvent,
     MessageType,
     merge_pending_message_event,
+    utf16_len,
 )
 from gateway.restart import (
     DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT,
@@ -9541,6 +9542,68 @@ class GatewayRunner:
         else:
             _progress_thread_id = source.thread_id
         _progress_metadata = {"thread_id": _progress_thread_id} if _progress_thread_id else None
+        _status_card_adapter = self.adapters.get(source.platform)
+        _single_status_card_enabled = (
+            source.platform == Platform.TELEGRAM
+            and _status_card_adapter is not None
+            and type(_status_card_adapter).edit_message is not BasePlatformAdapter.edit_message
+        )
+        _status_card_message_id = [None]
+        _status_card_last_text = [""]
+
+        def _format_status_card(status: str, detail: str | None = None, final_response: str | None = None) -> str:
+            if final_response is not None:
+                return f"상태: {status}\n\n{final_response}".strip()
+            detail = (detail or "").strip()
+            return f"상태: {status}" + (f"\n{detail}" if detail else "")
+
+        async def _send_or_edit_status_card(
+            status: str,
+            detail: str | None = None,
+            *,
+            final_response: str | None = None,
+        ) -> bool:
+            if not _single_status_card_enabled or not _status_card_adapter:
+                return False
+            content = _format_status_card(status, detail, final_response)
+            raw_limit = getattr(_status_card_adapter, "MAX_MESSAGE_LENGTH", 4096)
+            formatted_content = content
+            formatter = getattr(_status_card_adapter, "format_message", None)
+            if callable(formatter):
+                try:
+                    formatted_content = formatter(content)
+                except Exception:
+                    formatted_content = content
+            limit = max(500, raw_limit - 100)
+            if (
+                len(content) > limit
+                or len(formatted_content) > limit
+                or utf16_len(content) > limit
+                or utf16_len(formatted_content) > limit
+            ):
+                return False
+            if content == _status_card_last_text[0]:
+                return True
+            try:
+                if _status_card_message_id[0]:
+                    result = await _status_card_adapter.edit_message(
+                        chat_id=source.chat_id,
+                        message_id=_status_card_message_id[0],
+                        content=content,
+                    )
+                else:
+                    result = await _status_card_adapter.send(
+                        chat_id=source.chat_id,
+                        content=content,
+                        metadata=_progress_metadata,
+                    )
+                if result and result.success:
+                    _status_card_message_id[0] = result.message_id or _status_card_message_id[0]
+                    _status_card_last_text[0] = content
+                    return True
+            except Exception as _e:
+                logger.debug("single status card update failed: %s", _e)
+            return False
 
         async def send_progress_messages():
             if not progress_queue:
@@ -9588,6 +9651,14 @@ class GatewayRunner:
                     else:
                         msg = raw
                         progress_lines.append(msg)
+
+                    if _single_status_card_enabled:
+                        await _send_or_edit_status_card("진행", "작업을 진행 중입니다.")
+                        _last_edit_ts = time.monotonic()
+                        await asyncio.sleep(0.3)
+                        if _run_still_current():
+                            await adapter.send_typing(source.chat_id, metadata=_progress_metadata)
+                        continue
 
                     # Throttle edits: batch rapid tool updates into fewer
                     # API calls to avoid hitting Telegram flood control.
@@ -9858,6 +9929,15 @@ class GatewayRunner:
             def _interim_assistant_cb(text: str, *, already_streamed: bool = False) -> None:
                 if not _run_still_current():
                     return
+                if _single_status_card_enabled and not already_streamed and str(text or "").strip():
+                    try:
+                        asyncio.run_coroutine_threadsafe(
+                            _send_or_edit_status_card("진행", "작업을 진행 중입니다."),
+                            _loop_for_step,
+                        )
+                    except Exception as _e:
+                        logger.debug("single status card interim update error: %s", _e)
+                    return
                 if _stream_consumer is not None:
                     if already_streamed:
                         _stream_consumer.on_segment_break()
@@ -9865,6 +9945,8 @@ class GatewayRunner:
                         _stream_consumer.on_commentary(text)
                     return
                 if already_streamed or not _status_adapter or not str(text or "").strip():
+                    return
+                if _single_status_card_enabled:
                     return
                 try:
                     asyncio.run_coroutine_threadsafe(
@@ -10353,6 +10435,9 @@ class GatewayRunner:
             }
         
         # Start progress message sender if enabled
+        if _single_status_card_enabled:
+            await _send_or_edit_status_card("접수", "요청을 확인했습니다.")
+
         progress_task = None
         if tool_progress_enabled:
             progress_task = asyncio.create_task(send_progress_messages())
@@ -10933,6 +11018,21 @@ class GatewayRunner:
         # final answer.  Suppressing delivery here leaves the user staring
         # at silence.  (#10xxx — "agent stops after web search")
         _sc = stream_consumer_holder[0]
+        if isinstance(response, dict) and _single_status_card_enabled and not response.get("failed"):
+            _final_for_card = response.get("final_response") or ""
+            _can_embed_final = (
+                bool(_final_for_card)
+                and _final_for_card != "(empty)"
+                and "MEDIA:" not in _final_for_card
+                and "](" not in _final_for_card
+            )
+            if _can_embed_final and await _send_or_edit_status_card(
+                "완료",
+                final_response=_final_for_card,
+            ):
+                response["already_sent"] = True
+            else:
+                await _send_or_edit_status_card("완료", "응답은 별도 메시지로 전송합니다.")
         if isinstance(response, dict) and not response.get("failed"):
             _final = response.get("final_response") or ""
             _is_empty_sentinel = not _final or _final == "(empty)"
