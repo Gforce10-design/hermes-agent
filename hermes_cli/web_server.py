@@ -2471,20 +2471,8 @@ async def _run_mobile_prompt(prompt: str, session_id: Optional[str] = None) -> D
             agent = primary_holder.get("agent")
             if agent is not None and hasattr(agent, "interrupt"):
                 agent.interrupt("Mobile primary timed out before fallback")
-            primary_thread.join(timeout=1.0)
             _log.warning("Mobile primary timed out after %.1fs", timeout_seconds)
-            if primary_thread.is_alive():
-                return {
-                    "session_id": session_id,
-                    "text": "주 모델 응답이 지연되어 중복 실행 방지를 위해 중단했습니다. 잠시 후 다시 시도해 주세요.",
-                    "model": model,
-                }
-            try:
-                status, value = result_queue.get_nowait()
-            except queue.Empty:
-                primary = {"text": ""}
-            else:
-                primary = value if status == "ok" else {"text": ""}
+            primary = {"text": ""}
         else:
             if status == "error":
                 _log.warning("Mobile primary failed; switching to fallback", exc_info=value)

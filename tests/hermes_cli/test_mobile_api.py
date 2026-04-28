@@ -212,14 +212,18 @@ class TestMobileWebSocket:
         assert calls[1]["model"] == "opus"
 
     @pytest.mark.asyncio
-    async def test_run_mobile_prompt_does_not_start_fallback_while_timed_out_primary_is_running(self, monkeypatch):
+    async def test_run_mobile_prompt_starts_fallback_when_primary_times_out(self, monkeypatch):
         calls = []
+        interrupted = []
 
         class FakeAgent:
             def __init__(self, **kwargs):
                 self.kwargs = kwargs
                 self.session_id = kwargs.get("session_id") or "mobile-session"
                 self.model = kwargs.get("model") or "test-model"
+
+            def interrupt(self, reason):
+                interrupted.append(reason)
 
             def run_conversation(self, prompt):
                 calls.append(self.kwargs)
@@ -244,8 +248,9 @@ class TestMobileWebSocket:
 
         result = await self.web_server._run_mobile_prompt("안녕", session_id="s1")
 
-        assert result["text"] == "늦은 응답"
-        assert [call["provider"] for call in calls] == ["openai-codex"]
+        assert result["text"] == "오푸스 빠른 응답"
+        assert [call["provider"] for call in calls] == ["openai-codex", "claude-code"]
+        assert interrupted
 
     def test_rejects_unknown_message_type_with_error_event(self):
         with self.client.websocket_connect(self._url()) as conn:
