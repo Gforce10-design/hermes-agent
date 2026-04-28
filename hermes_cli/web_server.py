@@ -2610,23 +2610,61 @@ def _mobile_generated_at() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
-def _mobile_active_session_count() -> int:
+def _mobile_recent_sessions(limit: int = 5) -> List[Dict[str, Any]]:
+    """Return a sanitized recent-session summary for mobile status cards."""
     try:
         from hermes_state import SessionDB
 
         db = SessionDB()
         try:
-            sessions = db.list_sessions_rich(limit=50)
-            now = time.time()
-            return sum(
-                1 for s in sessions
-                if s.get("ended_at") is None
-                and (now - s.get("last_active", s.get("started_at", 0))) < 300
-            )
+            sessions = db.list_sessions_rich(limit=limit)
         finally:
             db.close()
     except Exception:
-        return 0
+        return []
+
+    now = time.time()
+    safe_sessions: List[Dict[str, Any]] = []
+    for index, session in enumerate(sessions, start=1):
+        started_at = session.get("started_at")
+        last_active = session.get("last_active", started_at or 0)
+        try:
+            last_active_ts = float(last_active or 0)
+        except (TypeError, ValueError):
+            last_active_ts = 0.0
+        is_active = session.get("ended_at") is None and (now - last_active_ts) < 300
+        safe_sessions.append(
+            {
+                "label": f"{'활성' if is_active else '최근'} 세션 {index}",
+                "is_active": bool(is_active),
+            }
+        )
+    return safe_sessions
+
+
+def _mobile_active_session_count() -> int:
+    return sum(1 for session in _mobile_recent_sessions(limit=50) if session.get("is_active"))
+
+
+def _mobile_read_only_actions() -> List[Dict[str, Any]]:
+    return [
+        {
+            "id": "refresh-status",
+            "title": "상태 새로고침",
+            "description": "Hermes 모바일 상태를 다시 조회합니다.",
+            "method": "GET",
+            "path": "/api/mobile/status",
+            "requires_approval": False,
+        },
+        {
+            "id": "view-recent-sessions",
+            "title": "최근 세션 보기",
+            "description": "최근 Hermes 대화 세션 요약을 읽기 전용으로 표시합니다.",
+            "method": "GET",
+            "path": "/api/mobile/status#recent_sessions",
+            "requires_approval": False,
+        },
+    ]
 
 
 def _mobile_status_snapshot(auth_method: str) -> Dict[str, Any]:
@@ -2636,6 +2674,7 @@ def _mobile_status_snapshot(auth_method: str) -> Dict[str, Any]:
     runtime = read_runtime_status() or {}
     gateway_state = runtime.get("gateway_state") or ("running" if gateway_pid is not None else "stopped")
     active_sessions = _mobile_active_session_count()
+    recent_sessions = _mobile_recent_sessions(limit=5)
     hermes_state = "running" if gateway_pid is not None else ("idle" if active_sessions else "stopped")
     platform_count = len(runtime.get("platforms") or {})
     notifications: List[Dict[str, str]] = [
@@ -2688,6 +2727,8 @@ def _mobile_status_snapshot(auth_method: str) -> Dict[str, Any]:
             "detail": f"연결된 게이트웨이 플랫폼 {platform_count}개; 원격 G3 점검 미실행",
         },
         "notifications": notifications,
+        "recent_sessions": recent_sessions,
+        "read_only_actions": _mobile_read_only_actions(),
     }
 
 

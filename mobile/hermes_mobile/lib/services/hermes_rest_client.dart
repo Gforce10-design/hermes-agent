@@ -89,6 +89,52 @@ class HermesNotification {
   }
 }
 
+class HermesRecentSession {
+  const HermesRecentSession({
+    required this.label,
+    required this.isActive,
+  });
+
+  final String label;
+  final bool isActive;
+
+  factory HermesRecentSession.fromJson(Map<String, dynamic> json) {
+    return HermesRecentSession(
+      label: '${json['label'] ?? '최근 Hermes 세션'}',
+      isActive: json['is_active'] == true,
+    );
+  }
+}
+
+class HermesReadOnlyAction {
+  const HermesReadOnlyAction({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.method,
+    required this.path,
+    required this.requiresApproval,
+  });
+
+  final String id;
+  final String title;
+  final String description;
+  final String method;
+  final String path;
+  final bool requiresApproval;
+
+  factory HermesReadOnlyAction.fromJson(Map<String, dynamic> json) {
+    return HermesReadOnlyAction(
+      id: '${json['id'] ?? ''}',
+      title: '${json['title'] ?? ''}',
+      description: '${json['description'] ?? ''}',
+      method: '${json['method'] ?? 'GET'}',
+      path: '${json['path'] ?? ''}',
+      requiresApproval: json['requires_approval'] == true,
+    );
+  }
+}
+
 class MobileStatusSnapshot {
   const MobileStatusSnapshot({
     required this.generatedAt,
@@ -96,6 +142,8 @@ class MobileStatusSnapshot {
     required this.mobileApi,
     required this.alphaMate,
     required this.notifications,
+    required this.recentSessions,
+    required this.readOnlyActions,
   });
 
   final String generatedAt;
@@ -103,9 +151,13 @@ class MobileStatusSnapshot {
   final MobileApiStatus mobileApi;
   final AlphaMateStatus alphaMate;
   final List<HermesNotification> notifications;
+  final List<HermesRecentSession> recentSessions;
+  final List<HermesReadOnlyAction> readOnlyActions;
 
   factory MobileStatusSnapshot.fromJson(Map<String, dynamic> json) {
     final notificationsJson = json['notifications'];
+    final recentSessionsJson = json['recent_sessions'];
+    final readOnlyActionsJson = json['read_only_actions'];
     return MobileStatusSnapshot(
       generatedAt: '${json['generated_at'] ?? ''}',
       hermes: HermesServiceStatus.fromJson(
@@ -121,6 +173,22 @@ class MobileStatusSnapshot {
           ? notificationsJson
               .whereType<Map>()
               .map((item) => HermesNotification.fromJson(
+                    item.cast<String, dynamic>(),
+                  ))
+              .toList(growable: false)
+          : const [],
+      recentSessions: recentSessionsJson is List
+          ? recentSessionsJson
+              .whereType<Map>()
+              .map((item) => HermesRecentSession.fromJson(
+                    item.cast<String, dynamic>(),
+                  ))
+              .toList(growable: false)
+          : const [],
+      readOnlyActions: readOnlyActionsJson is List
+          ? readOnlyActionsJson
+              .whereType<Map>()
+              .map((item) => HermesReadOnlyAction.fromJson(
                     item.cast<String, dynamic>(),
                   ))
               .toList(growable: false)

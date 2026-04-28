@@ -435,6 +435,10 @@ class _StatusScreenState extends State<StatusScreen> {
             ),
             const SizedBox(height: 12),
             _NotificationCard(notifications: snapshot.notifications),
+            const SizedBox(height: 12),
+            _ReadOnlyActionsCard(actions: snapshot.readOnlyActions),
+            const SizedBox(height: 12),
+            _RecentSessionsCard(sessions: snapshot.recentSessions),
             const SizedBox(height: 8),
             Text('갱신 시각: ${snapshot.generatedAt}',
                 style: Theme.of(context).textTheme.bodySmall),
@@ -481,6 +485,48 @@ class _NotificationCard extends StatelessWidget {
       title: '알림함',
       body: body,
       icon: Icons.notifications_active_outlined,
+    );
+  }
+}
+
+class _ReadOnlyActionsCard extends StatelessWidget {
+  const _ReadOnlyActionsCard({required this.actions});
+
+  final List<HermesReadOnlyAction> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final body = actions.isEmpty
+        ? '현재 실행 가능한 읽기 전용 액션이 없습니다.'
+        : actions
+            .map((item) =>
+                '• ${item.title}: ${item.description} (${item.method} ${item.path})')
+            .join('\n');
+    return _InfoCard(
+      title: '읽기 전용 액션',
+      body: body,
+      icon: Icons.fact_check_outlined,
+    );
+  }
+}
+
+class _RecentSessionsCard extends StatelessWidget {
+  const _RecentSessionsCard({required this.sessions});
+
+  final List<HermesRecentSession> sessions;
+
+  @override
+  Widget build(BuildContext context) {
+    final body = sessions.isEmpty
+        ? '최근 세션이 없습니다.'
+        : sessions
+            .map((item) =>
+                '• ${item.label}${item.isActive ? ' · 활성' : ''}')
+            .join('\n');
+    return _InfoCard(
+      title: '최근 세션',
+      body: body,
+      icon: Icons.history_outlined,
     );
   }
 }

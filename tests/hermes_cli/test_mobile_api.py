@@ -124,6 +124,8 @@ class TestMobileWebSocket:
             "mobile_api",
             "alpha_mate",
             "notifications",
+            "recent_sessions",
+            "read_only_actions",
         }
         assert data["hermes"]["service"] == "Hermes Agent"
         assert data["hermes"]["state"] in {"running", "stopped", "idle", "unknown"}
@@ -132,6 +134,29 @@ class TestMobileWebSocket:
         assert data["alpha_mate"]["summary"] != "준비 중"
         assert data["notifications"]
         assert {"id", "severity", "title", "message", "created_at"} <= set(data["notifications"][0])
+        assert isinstance(data["recent_sessions"], list)
+        for session in data["recent_sessions"]:
+            assert set(session) == {"label", "is_active"}
+            assert "id" not in session
+            assert "title" not in session
+        assert data["read_only_actions"] == [
+            {
+                "id": "refresh-status",
+                "title": "상태 새로고침",
+                "description": "Hermes 모바일 상태를 다시 조회합니다.",
+                "method": "GET",
+                "path": "/api/mobile/status",
+                "requires_approval": False,
+            },
+            {
+                "id": "view-recent-sessions",
+                "title": "최근 세션 보기",
+                "description": "최근 Hermes 대화 세션 요약을 읽기 전용으로 표시합니다.",
+                "method": "GET",
+                "path": "/api/mobile/status#recent_sessions",
+                "requires_approval": False,
+            },
+        ]
 
     def test_mobile_status_accepts_valid_access_headers(self, monkeypatch):
         monkeypatch.setenv("HERMES_CLOUDFLARE_ACCESS_CLIENT_ID", "client-id")

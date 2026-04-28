@@ -46,6 +46,22 @@ class _FakeStatusService implements HermesStatusService {
           createdAt: '2026-04-29T06:35:00Z',
         ),
       ],
+      recentSessions: [
+        HermesRecentSession(
+          label: '활성 세션',
+          isActive: true,
+        ),
+      ],
+      readOnlyActions: [
+        HermesReadOnlyAction(
+          id: 'view-recent-sessions',
+          title: '최근 세션 보기',
+          description: '최근 Hermes 대화 세션 요약을 읽기 전용으로 표시합니다.',
+          method: 'GET',
+          path: '/api/mobile/status#recent_sessions',
+          requiresApproval: false,
+        ),
+      ],
     );
   }
 }
@@ -138,6 +154,20 @@ void main() {
     expect(find.textContaining('Access 서비스 토큰'), findsOneWidget);
     expect(find.textContaining('원격 G3 점검 미실행'), findsOneWidget);
     expect(find.textContaining('모바일 API 연결됨'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('읽기 전용 액션'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('읽기 전용 액션'), findsOneWidget);
+    expect(find.text('최근 세션'), findsOneWidget);
+    expect(find.textContaining('최근 세션 보기'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.textContaining('활성 세션'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.textContaining('활성 세션'), findsOneWidget);
   });
 
   testWidgets('status tab shows fetch errors and refresh affordance',
