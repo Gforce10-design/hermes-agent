@@ -2,7 +2,53 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hermes_mobile/app.dart';
 import 'package:hermes_mobile/features/settings/settings_screen.dart';
+import 'package:hermes_mobile/services/hermes_rest_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+class _FakeStatusService implements HermesStatusService {
+  _FakeStatusService({this.error});
+
+  final Object? error;
+  int calls = 0;
+
+  @override
+  Future<MobileStatusSnapshot> fetchStatus({
+    required String serverUrl,
+    required String sessionToken,
+    required String cloudflareAccessClientId,
+    required String cloudflareAccessClientSecret,
+  }) async {
+    calls += 1;
+    if (error != null) throw error!;
+    return const MobileStatusSnapshot(
+      generatedAt: '2026-04-29T06:35:00Z',
+      hermes: HermesServiceStatus(
+        service: 'Hermes Agent',
+        state: 'running',
+        detail: 'Gateway running; active sessions 1',
+      ),
+      mobileApi: MobileApiStatus(
+        state: 'online',
+        auth: 'cloudflare_access_service_token',
+        detail: '인증된 읽기 전용 모바일 상태 API',
+      ),
+      alphaMate: AlphaMateStatus(
+        state: 'placeholder',
+        summary: 'AlphaMate 로컬 운영 신호를 표시 중입니다.',
+        detail: '원격 G3 점검 미실행',
+      ),
+      notifications: [
+        HermesNotification(
+          id: 'n1',
+          severity: 'info',
+          title: '모바일 API 연결됨',
+          message: '상태 조회 API가 응답했습니다.',
+          createdAt: '2026-04-29T06:35:00Z',
+        ),
+      ],
+    );
+  }
+}
 
 void main() {
   setUp(() {
@@ -40,6 +86,24 @@ void main() {
     expect(find.text('탭 이동 후에도 남아야 합니다'), findsOneWidget);
   });
 
+  testWidgets('chat renders restored job timeline cards with Korean labels',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'chat.history.messages':
+          '[{"role":"system","text":"테스트 실행 중","jobStatus":"progress","jobId":"job-1","jobTitle":"배포 작업","jobProgress":65}]',
+    });
+
+    await tester.pumpWidget(const HermesMobileApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('채팅'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('작업 진행 중'), findsOneWidget);
+    expect(find.text('배포 작업'), findsOneWidget);
+    expect(find.textContaining('65%'), findsOneWidget);
+    expect(find.text('테스트 실행 중'), findsOneWidget);
+  });
+
   testWidgets('multi-agent tab shows codex primary and opus fallback agents',
       (tester) async {
     await tester.pumpWidget(const HermesMobileApp());
@@ -53,6 +117,42 @@ void main() {
     expect(find.text('Claude CLI Opus 4.7'), findsOneWidget);
     expect(find.text('Hermes 운영'), findsOneWidget);
     expect(find.text('AlphaMate 운영'), findsOneWidget);
+  });
+
+  testWidgets('status tab loads real mobile status cards with Korean labels',
+      (tester) async {
+    final fakeStatus = _FakeStatusService();
+    await tester.pumpWidget(HermesMobileApp(statusService: fakeStatus));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('상태'));
+    await tester.pumpAndSettle();
+
+    expect(fakeStatus.calls, 1);
+    expect(find.text('운영 상태'), findsOneWidget);
+    expect(find.text('Hermes'), findsOneWidget);
+    expect(find.text('모바일 API'), findsOneWidget);
+    expect(find.text('AlphaMate'), findsOneWidget);
+    expect(find.text('알림함'), findsOneWidget);
+    expect(find.textContaining('실행 중'), findsOneWidget);
+    expect(find.textContaining('Access 서비스 토큰'), findsOneWidget);
+    expect(find.textContaining('원격 G3 점검 미실행'), findsOneWidget);
+    expect(find.textContaining('모바일 API 연결됨'), findsOneWidget);
+  });
+
+  testWidgets('status tab shows fetch errors and refresh affordance',
+      (tester) async {
+    await tester.pumpWidget(HermesMobileApp(
+      statusService: _FakeStatusService(error: StateError('인증 실패')),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('상태'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('상태 조회 실패'), findsOneWidget);
+    expect(find.textContaining('인증 실패'), findsOneWidget);
+    expect(find.byTooltip('새로고침'), findsOneWidget);
   });
 
   testWidgets('settings save gives visible feedback and keeps values',

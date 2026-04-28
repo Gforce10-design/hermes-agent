@@ -1,5 +1,7 @@
 enum HermesMessageRole { user, assistant, system, tool }
 
+enum HermesJobStatus { accepted, progress, completed, failed }
+
 class HermesMessage {
   const HermesMessage({
     required this.role,
@@ -12,6 +14,10 @@ class HermesMessage {
     this.attachmentType,
     this.approvalId,
     this.choices = const [],
+    this.jobStatus,
+    this.jobId,
+    this.jobTitle,
+    this.jobProgress,
   });
 
   final HermesMessageRole role;
@@ -24,6 +30,12 @@ class HermesMessage {
   final String? attachmentType;
   final String? approvalId;
   final List<String> choices;
+  final HermesJobStatus? jobStatus;
+  final String? jobId;
+  final String? jobTitle;
+  final int? jobProgress;
+
+  bool get isJob => jobStatus != null;
 
   HermesMessage copyWith({
     HermesMessageRole? role,
@@ -36,6 +48,10 @@ class HermesMessage {
     String? attachmentType,
     String? approvalId,
     List<String>? choices,
+    HermesJobStatus? jobStatus,
+    String? jobId,
+    String? jobTitle,
+    int? jobProgress,
   }) {
     return HermesMessage(
       role: role ?? this.role,
@@ -48,6 +64,10 @@ class HermesMessage {
       attachmentType: attachmentType ?? this.attachmentType,
       approvalId: approvalId ?? this.approvalId,
       choices: choices ?? this.choices,
+      jobStatus: jobStatus ?? this.jobStatus,
+      jobId: jobId ?? this.jobId,
+      jobTitle: jobTitle ?? this.jobTitle,
+      jobProgress: jobProgress ?? this.jobProgress,
     );
   }
 
@@ -62,6 +82,10 @@ class HermesMessage {
         if (attachmentType != null) 'attachmentType': attachmentType,
         if (approvalId != null) 'approvalId': approvalId,
         if (choices.isNotEmpty) 'choices': choices,
+        if (jobStatus != null) 'jobStatus': jobStatus!.name,
+        if (jobId != null) 'jobId': jobId,
+        if (jobTitle != null) 'jobTitle': jobTitle,
+        if (jobProgress != null) 'jobProgress': jobProgress,
       };
 
   static HermesMessage fromJson(Map<String, dynamic> json) {
@@ -70,6 +94,13 @@ class HermesMessage {
       (value) => value.name == roleName,
       orElse: () => HermesMessageRole.system,
     );
+    final jobStatusName = json['jobStatus']?.toString();
+    final jobStatus = jobStatusName == null
+        ? null
+        : HermesJobStatus.values.cast<HermesJobStatus?>().firstWhere(
+              (value) => value?.name == jobStatusName,
+              orElse: () => null,
+            );
     return HermesMessage(
       role: role,
       text: json['text']?.toString() ?? '',
@@ -83,6 +114,16 @@ class HermesMessage {
       choices: (json['choices'] is List)
           ? (json['choices'] as List).map((item) => item.toString()).toList()
           : const [],
+      jobStatus: jobStatus,
+      jobId: json['jobId']?.toString(),
+      jobTitle: json['jobTitle']?.toString(),
+      jobProgress: _parseInt(json['jobProgress']),
     );
+  }
+
+  static int? _parseInt(Object? value) {
+    if (value is int) return value;
+    if (value is num) return value.round();
+    return int.tryParse(value?.toString() ?? '');
   }
 }

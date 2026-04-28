@@ -24,6 +24,10 @@ class TestMobileWebSocket:
         tok = token if token is not None else self.token
         return f"/api/mobile/ws?{urlencode({'token': tok})}"
 
+    @staticmethod
+    def _receive_types(conn, count: int) -> list[str]:
+        return [conn.receive_json()["type"] for _ in range(count)]
+
     def test_mobile_bootstrap_rejects_anonymous_requests(self):
         resp = self.client.get("/api/mobile/bootstrap")
 
@@ -59,9 +63,14 @@ class TestMobileWebSocket:
 
         with self.client.websocket_connect(data["mobile_ws_url"]) as conn:
             conn.send_json({"type": "prompt.submit", "text": "부트스트랩", "client": "flutter"})
-            assert conn.receive_json()["type"] == "message.start"
-            assert conn.receive_json()["type"] == "message.delta"
-            assert conn.receive_json()["type"] == "message.complete"
+            assert self._receive_types(conn, 6) == [
+                "job.accepted",
+                "job.progress",
+                "message.start",
+                "message.delta",
+                "message.complete",
+                "job.completed",
+            ]
 
     def test_mobile_bootstrap_accepts_valid_cloudflare_access_assertion(self, monkeypatch):
         monkeypatch.setattr(self.web_server, "_has_valid_cloudflare_access_assertion", lambda request: True)
@@ -93,6 +102,62 @@ class TestMobileWebSocket:
         assert isinstance(data["build"], int)
         assert data["apk_url"].endswith("/api/mobile/app-release/apk")
         assert "삭제하지 말고" in data["notes"]
+
+    def test_mobile_status_rejects_anonymous_requests(self):
+        resp = self.client.get("/api/mobile/status")
+
+        assert resp.status_code == 401
+
+    def test_mobile_status_returns_safe_snapshot_with_session_token(self):
+        resp = self.client.get(
+            "/api/mobile/status",
+            headers={self.web_server._SESSION_HEADER_NAME: self.token},
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["schema_version"] == 1
+        assert set(data) == {
+            "schema_version",
+            "generated_at",
+            "hermes",
+            "mobile_api",
+            "alpha_mate",
+            "notifications",
+        }
+        assert data["hermes"]["service"] == "Hermes Agent"
+        assert data["hermes"]["state"] in {"running", "stopped", "idle", "unknown"}
+        assert data["mobile_api"]["state"] == "online"
+        assert data["alpha_mate"]["state"] == "placeholder"
+        assert data["alpha_mate"]["summary"] != "준비 중"
+        assert data["notifications"]
+        assert {"id", "severity", "title", "message", "created_at"} <= set(data["notifications"][0])
+
+    def test_mobile_status_accepts_valid_access_headers(self, monkeypatch):
+        monkeypatch.setenv("HERMES_CLOUDFLARE_ACCESS_CLIENT_ID", "client-id")
+        monkeypatch.setenv("HERMES_CLOUDFLARE_ACCESS_CLIENT_SECRET", "client-secret")
+
+        resp = self.client.get(
+            "/api/mobile/status",
+            headers={
+                "CF-Access-Client-Id": "client-id",
+                "CF-Access-Client-Secret": "client-secret",
+            },
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["mobile_api"]["auth"] == "cloudflare_access_service_token"
+
+    def test_mobile_status_accepts_valid_cloudflare_access_assertion(self, monkeypatch):
+        monkeypatch.setattr(self.web_server, "_has_valid_cloudflare_access_assertion", lambda request: True)
+
+        resp = self.client.get(
+            "/api/mobile/status",
+            headers={"Cf-Access-Jwt-Assertion": "signed-cloudflare-access-jwt"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["mobile_api"]["auth"] == "cloudflare_access_assertion"
 
     def test_rejects_missing_token(self):
         from starlette.websockets import WebSocketDisconnect
@@ -130,16 +195,35 @@ class TestMobileWebSocket:
         with self.client.websocket_connect(self._url()) as conn:
             conn.send_json({"type": "prompt.submit", "text": "안녕", "client": "flutter"})
 
+            accepted = conn.receive_json()
+            progress = conn.receive_json()
             started = conn.receive_json()
             delta = conn.receive_json()
             complete = conn.receive_json()
+            completed = conn.receive_json()
 
+        assert accepted["type"] == "job.accepted"
+        assert accepted["session_id"] is None
+        assert accepted["job_id"]
+        assert accepted["summary"] == "안녕"
+        assert progress == {
+            "type": "job.progress",
+            "job_id": accepted["job_id"],
+            "session_id": None,
+            "stage": "model.starting",
+        }
         assert started == {"type": "message.start", "session_id": None}
         assert delta == {"type": "message.delta", "text": "응답: 안녕"}
         assert complete == {
             "type": "message.complete",
             "session_id": "mobile-session-1",
             "text": "응답: 안녕",
+            "model": "test-model",
+        }
+        assert completed == {
+            "type": "job.completed",
+            "job_id": accepted["job_id"],
+            "session_id": "mobile-session-1",
             "model": "test-model",
         }
 
@@ -275,9 +359,9 @@ class TestMobileWebSocket:
 
         with self.client.websocket_connect(self._url()) as conn:
             conn.send_json({"type": "prompt.submit", "text": "첫 질문", "client": "flutter"})
-            assert conn.receive_json()["type"] == "message.start"
-            assert conn.receive_json()["type"] == "message.delta"
+            assert self._receive_types(conn, 4) == ["job.accepted", "job.progress", "message.start", "message.delta"]
             first_complete = conn.receive_json()
+            assert conn.receive_json()["type"] == "job.completed"
 
             conn.send_json({
                 "type": "prompt.submit",
@@ -285,9 +369,9 @@ class TestMobileWebSocket:
                 "session_id": first_complete["session_id"],
                 "client": "flutter",
             })
-            assert conn.receive_json()["type"] == "message.start"
-            assert conn.receive_json()["type"] == "message.delta"
+            assert self._receive_types(conn, 4) == ["job.accepted", "job.progress", "message.start", "message.delta"]
             second_complete = conn.receive_json()
+            assert conn.receive_json()["type"] == "job.completed"
 
         assert calls == [("첫 질문", None), ("후속 질문", "mobile-session-1")]
         assert second_complete["session_id"] == "mobile-session-1"
@@ -300,10 +384,18 @@ class TestMobileWebSocket:
 
         with self.client.websocket_connect(self._url()) as conn:
             conn.send_json({"type": "prompt.submit", "text": "실패", "client": "flutter"})
+            accepted = conn.receive_json()
+            assert accepted["type"] == "job.accepted"
+            assert conn.receive_json()["type"] == "job.progress"
             assert conn.receive_json()["type"] == "message.start"
             msg = conn.receive_json()
 
-        assert msg == {"type": "error", "message": "Mobile prompt failed"}
+        assert msg == {
+            "type": "job.failed",
+            "job_id": accepted["job_id"],
+            "session_id": None,
+            "error": "Mobile prompt failed",
+        }
 
     def test_prompt_submit_requires_text(self):
         with self.client.websocket_connect(self._url()) as conn:

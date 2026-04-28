@@ -208,6 +208,135 @@ void main() {
     });
   });
 
+  test('job.failed removes blank pending assistant bubble from message.start',
+      () async {
+    final fake = FakeTransport();
+    final chat = ChatController(
+      serverUrl: 'http://localhost:9119',
+      sessionToken: 'token',
+      transportFactory: ({
+        required serverUrl,
+        required sessionToken,
+        required cloudflareAccessClientId,
+        required cloudflareAccessClientSecret,
+      }) =>
+          fake,
+    );
+
+    await chat.connect();
+    fake.controller.add({'type': 'message.start'});
+    fake.controller.add({
+      'type': 'job.failed',
+      'job_id': 'job-1',
+      'title': '배포 작업',
+      'message': '작업 처리에 실패했습니다',
+    });
+    await Future<void>.delayed(Duration.zero);
+
+    expect(
+      chat.messages.where((message) =>
+          message.role == HermesMessageRole.assistant &&
+          message.pending &&
+          message.text.isEmpty),
+      isEmpty,
+    );
+    expect(chat.messages.where((message) => message.pending), isEmpty);
+    expect(chat.messages.single.jobStatus, HermesJobStatus.failed);
+    expect(chat.messages.single.text, '작업 처리에 실패했습니다');
+    expect(chat.sending, isFalse);
+  });
+
+  test('error removes blank pending assistant bubble from message.start',
+      () async {
+    final fake = FakeTransport();
+    final chat = ChatController(
+      serverUrl: 'http://localhost:9119',
+      sessionToken: 'token',
+      transportFactory: ({
+        required serverUrl,
+        required sessionToken,
+        required cloudflareAccessClientId,
+        required cloudflareAccessClientSecret,
+      }) =>
+          fake,
+    );
+
+    await chat.connect();
+    fake.controller.add({'type': 'message.start'});
+    fake.controller.add({'type': 'error', 'message': '서버 오류'});
+    await Future<void>.delayed(Duration.zero);
+
+    expect(chat.messages, isEmpty);
+    expect(chat.error, '서버 오류');
+    expect(chat.sending, isFalse);
+  });
+
+  test('job websocket events are stored as durable timeline messages',
+      () async {
+    final fake = FakeTransport();
+    final chat = ChatController(
+      serverUrl: 'http://localhost:9119',
+      sessionToken: 'token',
+      transportFactory: ({
+        required serverUrl,
+        required sessionToken,
+        required cloudflareAccessClientId,
+        required cloudflareAccessClientSecret,
+      }) =>
+          fake,
+    );
+
+    await chat.connect();
+    fake.controller.add({
+      'type': 'job.accepted',
+      'job_id': 'job-1',
+      'title': '배포 작업',
+      'message': '대기열에 등록됨',
+    });
+    fake.controller.add({
+      'type': 'job.progress',
+      'job_id': 'job-1',
+      'title': '배포 작업',
+      'progress': 40,
+      'message': '테스트 실행 중',
+    });
+    fake.controller.add({
+      'type': 'job.completed',
+      'job_id': 'job-1',
+      'title': '배포 작업',
+      'message': '배포 완료',
+    });
+    await Future<void>.delayed(Duration.zero);
+
+    final jobs = chat.messages.where((message) => message.isJob).toList();
+    expect(jobs.map((message) => message.jobStatus), [
+      HermesJobStatus.accepted,
+      HermesJobStatus.progress,
+      HermesJobStatus.completed,
+    ]);
+    expect(jobs[1].jobId, 'job-1');
+    expect(jobs[1].jobTitle, '배포 작업');
+    expect(jobs[1].jobProgress, 40);
+    expect(jobs[1].text, contains('테스트 실행 중'));
+
+    final restored = ChatController(
+      serverUrl: 'http://localhost:9119',
+      sessionToken: 'token',
+      transportFactory: ({
+        required serverUrl,
+        required sessionToken,
+        required cloudflareAccessClientId,
+        required cloudflareAccessClientSecret,
+      }) =>
+          fake,
+    );
+    await Future<void>.delayed(Duration.zero);
+    await restored.restoreHistory();
+
+    expect(restored.messages.where((message) => message.isJob).length, 3);
+    expect(restored.messages.last.jobStatus, HermesJobStatus.completed);
+  });
+
   test('connect passes Cloudflare Access service token settings to transport',
       () async {
     final fake = FakeTransport();

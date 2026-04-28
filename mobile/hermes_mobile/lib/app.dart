@@ -4,10 +4,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'features/chat/chat_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/update/update_service.dart';
+import 'services/hermes_rest_client.dart';
 import 'services/hermes_ws_client.dart';
 
 class HermesMobileApp extends StatefulWidget {
-  const HermesMobileApp({super.key});
+  const HermesMobileApp({super.key, this.statusService = const HermesRestClient()});
+
+  final HermesStatusService statusService;
 
   @override
   State<HermesMobileApp> createState() => _HermesMobileAppState();
@@ -146,7 +149,15 @@ class _HermesMobileAppState extends State<HermesMobileApp> {
         cloudflareAccessClientSecret: _cloudflareAccessClientSecret,
       ),
       const _AgentsScreen(),
-      const _StatusScreen(),
+      StatusScreen(
+        serverUrl: _serverUrl,
+        sessionToken: _sessionToken,
+        cloudflareAccessClientId: _cloudflareAccessClientId,
+        cloudflareAccessClientSecret: _cloudflareAccessClientSecret,
+        loaded: _loaded,
+        active: _index == 3,
+        statusService: widget.statusService,
+      ),
       SettingsScreen(
         serverUrl: _serverUrl,
         sessionToken: _sessionToken,
@@ -274,32 +285,202 @@ class _AgentsScreen extends StatelessWidget {
   }
 }
 
-class _StatusScreen extends StatelessWidget {
-  const _StatusScreen();
+class StatusScreen extends StatefulWidget {
+  const StatusScreen({
+    super.key,
+    required this.serverUrl,
+    required this.sessionToken,
+    required this.cloudflareAccessClientId,
+    required this.cloudflareAccessClientSecret,
+    required this.loaded,
+    required this.active,
+    this.statusService = const HermesRestClient(),
+  });
+
+  final String serverUrl;
+  final String sessionToken;
+  final String cloudflareAccessClientId;
+  final String cloudflareAccessClientSecret;
+  final bool loaded;
+  final bool active;
+  final HermesStatusService statusService;
+
+  @override
+  State<StatusScreen> createState() => _StatusScreenState();
+}
+
+class _StatusScreenState extends State<StatusScreen> {
+  MobileStatusSnapshot? _snapshot;
+  String? _error;
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchIfReady();
+  }
+
+  @override
+  void didUpdateWidget(covariant StatusScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final becameActive = widget.active && !oldWidget.active;
+    final settingsChanged = widget.serverUrl != oldWidget.serverUrl ||
+        widget.sessionToken != oldWidget.sessionToken ||
+        widget.cloudflareAccessClientId != oldWidget.cloudflareAccessClientId ||
+        widget.cloudflareAccessClientSecret !=
+            oldWidget.cloudflareAccessClientSecret;
+    if (becameActive || (widget.active && settingsChanged)) {
+      _fetchIfReady();
+    }
+  }
+
+  Future<void> _fetchIfReady() async {
+    if (!widget.loaded || !widget.active || _loading) return;
+    await _refresh();
+  }
+
+  Future<void> _refresh() async {
+    if (!widget.loaded) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final snapshot = await widget.statusService.fetchStatus(
+        serverUrl: widget.serverUrl,
+        sessionToken: widget.sessionToken,
+        cloudflareAccessClientId: widget.cloudflareAccessClientId,
+        cloudflareAccessClientSecret: widget.cloudflareAccessClientSecret,
+      );
+      if (!mounted) return;
+      setState(() {
+        _snapshot = snapshot;
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = '$error';
+        _loading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: const [
-        _InfoCard(
-          title: '인프라',
-          body: 'A8 · G3 · Desktop 상태 패널 준비 중',
-          icon: Icons.dns_outlined,
-        ),
-        SizedBox(height: 12),
-        _InfoCard(
-          title: 'AlphaMate',
-          body: 'Agent · Dashboard · Telebot 상태 패널 준비 중',
-          icon: Icons.auto_graph_outlined,
-        ),
-        SizedBox(height: 12),
-        _InfoCard(
-          title: '알림함',
-          body: '장애, 승인 요청, 작업 완료 알림을 모을 예정입니다.',
-          icon: Icons.notifications_active_outlined,
-        ),
-      ],
+    final snapshot = _snapshot;
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text('운영 상태',
+                    style: Theme.of(context).textTheme.headlineSmall),
+              ),
+              IconButton(
+                tooltip: '새로고침',
+                onPressed: _loading ? null : _refresh,
+                icon: const Icon(Icons.refresh),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (!widget.loaded)
+            const _InfoCard(
+              title: '상태 불러오는 중',
+              body: '저장된 연결 설정을 읽고 있습니다.',
+              icon: Icons.hourglass_empty_outlined,
+            )
+          else if (_loading && snapshot == null)
+            const _InfoCard(
+              title: '상태 불러오는 중',
+              body: 'Hermes 모바일 상태 API에 연결하고 있습니다.',
+              icon: Icons.sync_outlined,
+            )
+          else if (_error != null)
+            _InfoCard(
+              title: '상태 조회 실패',
+              body: '서버 URL, 세션 토큰 또는 Cloudflare Access 설정을 확인해 주세요.\n$_error',
+              icon: Icons.error_outline,
+            )
+          else if (snapshot == null)
+            const _InfoCard(
+              title: '상태 대기 중',
+              body: '새로고침을 눌러 Hermes 상태를 확인하세요.',
+              icon: Icons.monitor_heart_outlined,
+            )
+          else ...[
+            _InfoCard(
+              title: 'Hermes',
+              body:
+                  '${_stateLabel(snapshot.hermes.state)} · ${snapshot.hermes.service}\n${snapshot.hermes.detail}',
+              icon: Icons.dns_outlined,
+            ),
+            const SizedBox(height: 12),
+            _InfoCard(
+              title: '모바일 API',
+              body:
+                  '${_stateLabel(snapshot.mobileApi.state)} · 인증: ${_authLabel(snapshot.mobileApi.auth)}\n${snapshot.mobileApi.detail}',
+              icon: Icons.phone_android_outlined,
+            ),
+            const SizedBox(height: 12),
+            _InfoCard(
+              title: 'AlphaMate',
+              body:
+                  '${snapshot.alphaMate.summary}\n${snapshot.alphaMate.detail}',
+              icon: Icons.auto_graph_outlined,
+            ),
+            const SizedBox(height: 12),
+            _NotificationCard(notifications: snapshot.notifications),
+            const SizedBox(height: 8),
+            Text('갱신 시각: ${snapshot.generatedAt}',
+                style: Theme.of(context).textTheme.bodySmall),
+          ],
+        ],
+      ),
+    );
+  }
+
+  static String _stateLabel(String state) {
+    return switch (state) {
+      'running' => '실행 중',
+      'online' => '온라인',
+      'idle' => '대기',
+      'stopped' => '중지됨',
+      'placeholder' => '요약',
+      _ => state,
+    };
+  }
+
+  static String _authLabel(String auth) {
+    return switch (auth) {
+      'dashboard_session' => '세션 토큰',
+      'cloudflare_access_service_token' => 'Access 서비스 토큰',
+      'cloudflare_access_assertion' => 'Access 로그인',
+      _ => auth,
+    };
+  }
+}
+
+class _NotificationCard extends StatelessWidget {
+  const _NotificationCard({required this.notifications});
+
+  final List<HermesNotification> notifications;
+
+  @override
+  Widget build(BuildContext context) {
+    final body = notifications.isEmpty
+        ? '현재 표시할 알림이 없습니다.'
+        : notifications
+            .map((item) => '• ${item.title}: ${item.message}')
+            .join('\n');
+    return _InfoCard(
+      title: '알림함',
+      body: body,
+      icon: Icons.notifications_active_outlined,
     );
   }
 }

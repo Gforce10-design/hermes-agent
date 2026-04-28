@@ -108,6 +108,7 @@ _PUBLIC_API_PATHS: frozenset = frozenset({
     "/api/dashboard/plugins",
     "/api/dashboard/plugins/rescan",
     "/api/mobile/bootstrap",
+    "/api/mobile/status",
     "/api/mobile/app-update",
     "/api/mobile/app-release/apk",
 })
@@ -2580,16 +2581,121 @@ def _has_valid_cloudflare_access_assertion(request: Request) -> bool:
         return False
 
 
+def _mobile_auth_method(request: Request) -> str | None:
+    """Return the mobile auth method name, or None when unauthorized."""
+    if _has_valid_session_token(request):
+        return "dashboard_session"
+    if _has_valid_mobile_access_headers(request):
+        return "cloudflare_access_service_token"
+    if _has_valid_cloudflare_access_assertion(request):
+        return "cloudflare_access_assertion"
+    return None
+
+
+def _require_mobile_auth(request: Request) -> str:
+    auth_method = _mobile_auth_method(request)
+    if not auth_method:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return auth_method
+
+
 @app.get("/api/mobile/bootstrap")
 async def mobile_bootstrap(request: Request) -> Dict[str, Any]:
     """Return the native mobile WebSocket URL without exposing it to anonymous callers."""
-    if not (
-        _has_valid_session_token(request)
-        or _has_valid_mobile_access_headers(request)
-        or _has_valid_cloudflare_access_assertion(request)
-    ):
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    _require_mobile_auth(request)
     return {"mobile_ws_url": f"/api/mobile/ws?token={_SESSION_TOKEN}"}
+
+
+def _mobile_generated_at() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def _mobile_active_session_count() -> int:
+    try:
+        from hermes_state import SessionDB
+
+        db = SessionDB()
+        try:
+            sessions = db.list_sessions_rich(limit=50)
+            now = time.time()
+            return sum(
+                1 for s in sessions
+                if s.get("ended_at") is None
+                and (now - s.get("last_active", s.get("started_at", 0))) < 300
+            )
+        finally:
+            db.close()
+    except Exception:
+        return 0
+
+
+def _mobile_status_snapshot(auth_method: str) -> Dict[str, Any]:
+    """Build a read-only, mobile-safe status snapshot from local state only."""
+    generated_at = _mobile_generated_at()
+    gateway_pid = get_running_pid()
+    runtime = read_runtime_status() or {}
+    gateway_state = runtime.get("gateway_state") or ("running" if gateway_pid is not None else "stopped")
+    active_sessions = _mobile_active_session_count()
+    hermes_state = "running" if gateway_pid is not None else ("idle" if active_sessions else "stopped")
+    platform_count = len(runtime.get("platforms") or {})
+    notifications: List[Dict[str, str]] = [
+        {
+            "id": "mobile-api-online",
+            "severity": "info",
+            "title": "모바일 API 연결됨",
+            "message": "상태 조회 API가 인증된 모바일 요청에 응답하고 있습니다.",
+            "created_at": generated_at,
+        },
+        {
+            "id": "alphamate-local-placeholder",
+            "severity": "info",
+            "title": "AlphaMate 로컬 요약",
+            "message": "원격 G3 호출 없이 로컬 Hermes 정보 기준으로 요약했습니다.",
+            "created_at": generated_at,
+        },
+    ]
+    if gateway_state in ("stopped", "startup_failed"):
+        notifications.append(
+            {
+                "id": "gateway-not-running",
+                "severity": "warning",
+                "title": "게이트웨이 확인 필요",
+                "message": "로컬 런타임 기준으로 메시징 게이트웨이가 실행 중이 아닙니다.",
+                "created_at": generated_at,
+            }
+        )
+
+    return {
+        "schema_version": 1,
+        "generated_at": generated_at,
+        "hermes": {
+            "service": "Hermes Agent",
+            "state": hermes_state,
+            "detail": f"Gateway {gateway_state}; active sessions {active_sessions}",
+            "version": __version__,
+            "gateway_state": gateway_state,
+            "gateway_pid": gateway_pid,
+            "active_sessions": active_sessions,
+        },
+        "mobile_api": {
+            "state": "online",
+            "auth": auth_method,
+            "detail": "인증된 읽기 전용 모바일 상태 API",
+        },
+        "alpha_mate": {
+            "state": "placeholder",
+            "summary": "AlphaMate 원격 상태는 호출하지 않고 Hermes 로컬 운영 신호만 표시 중입니다.",
+            "detail": f"연결된 게이트웨이 플랫폼 {platform_count}개; 원격 G3 점검 미실행",
+        },
+        "notifications": notifications,
+    }
+
+
+@app.get("/api/mobile/status")
+async def mobile_status(request: Request) -> Dict[str, Any]:
+    """Return a mobile-safe, read-only status snapshot behind the mobile auth boundary."""
+    auth_method = _require_mobile_auth(request)
+    return _mobile_status_snapshot(auth_method)
 
 
 def _mobile_release_apk_path() -> Path:
@@ -2679,24 +2785,54 @@ async def mobile_ws(ws: WebSocket) -> None:
             if session_id is not None:
                 session_id = str(session_id)
 
+            job_id = secrets.token_urlsafe(12)
+            summary = text if len(text) <= 160 else f"{text[:157]}..."
+            if not await _safe_send_mobile_json(ws, {
+                "type": "job.accepted",
+                "job_id": job_id,
+                "session_id": session_id,
+                "summary": summary,
+            }):
+                return
+            if not await _safe_send_mobile_json(ws, {
+                "type": "job.progress",
+                "job_id": job_id,
+                "session_id": session_id,
+                "stage": "model.starting",
+            }):
+                return
             if not await _safe_send_mobile_json(ws, {"type": "message.start", "session_id": session_id}):
                 return
             try:
                 result = await _run_mobile_prompt(text, session_id=session_id)
             except Exception:
                 _log.exception("Mobile prompt failed")
-                if not await _send_mobile_error(ws, "Mobile prompt failed"):
+                if not await _safe_send_mobile_json(ws, {
+                    "type": "job.failed",
+                    "job_id": job_id,
+                    "session_id": session_id,
+                    "error": "Mobile prompt failed",
+                }):
                     return
                 continue
 
             response_text = str(result.get("text") or "")
+            result_session_id = result.get("session_id") or session_id
+            result_model = result.get("model")
             if not await _safe_send_mobile_json(ws, {"type": "message.delta", "text": response_text}):
                 return
             if not await _safe_send_mobile_json(ws, {
                 "type": "message.complete",
-                "session_id": result.get("session_id") or session_id,
+                "session_id": result_session_id,
                 "text": response_text,
-                "model": result.get("model"),
+                "model": result_model,
+            }):
+                return
+            if not await _safe_send_mobile_json(ws, {
+                "type": "job.completed",
+                "job_id": job_id,
+                "session_id": result_session_id,
+                "model": result_model,
             }):
                 return
     finally:

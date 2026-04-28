@@ -220,7 +220,23 @@ class ChatController extends ChangeNotifier {
               : const [],
         ));
         break;
+      case 'job.accepted':
+        _addJobTimelineMessage(event, HermesJobStatus.accepted);
+        break;
+      case 'job.progress':
+        _addJobTimelineMessage(event, HermesJobStatus.progress);
+        break;
+      case 'job.completed':
+        _addJobTimelineMessage(event, HermesJobStatus.completed);
+        _sending = false;
+        break;
+      case 'job.failed':
+        _clearPendingAssistantBubble();
+        _addJobTimelineMessage(event, HermesJobStatus.failed);
+        _sending = false;
+        break;
       case 'error':
+        _clearPendingAssistantBubble();
         _error = '${event['message'] ?? '알 수 없는 오류'}';
         _sending = false;
         break;
@@ -232,6 +248,64 @@ class ChatController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _addJobTimelineMessage(
+    Map<String, dynamic> event,
+    HermesJobStatus status,
+  ) {
+    final title = _firstString(event, const [
+          'title',
+          'summary',
+          'name',
+          'job_name',
+        ]) ??
+        '작업';
+    final detail = _firstString(event, const [
+      'message',
+      'text',
+      'detail',
+      'error',
+      'reason',
+    ]);
+    final progress = _parseProgress(event['progress'] ??
+        event['percent'] ??
+        event['percentage'] ??
+        event['progress_percent']);
+    final label = _jobStatusLabel(status);
+    _messages.add(HermesMessage(
+      role: HermesMessageRole.system,
+      text: detail == null || detail.isEmpty ? '$label: $title' : detail,
+      createdAt: DateTime.now(),
+      jobStatus: status,
+      jobId: _firstString(event, const ['job_id', 'jobId', 'id']),
+      jobTitle: title,
+      jobProgress: progress,
+    ));
+    unawaited(_saveHistory());
+  }
+
+  String? _firstString(Map<String, dynamic> event, List<String> keys) {
+    for (final key in keys) {
+      final value = event[key];
+      if (value == null) continue;
+      final text = value.toString().trim();
+      if (text.isNotEmpty) return text;
+    }
+    return null;
+  }
+
+  int? _parseProgress(Object? value) {
+    final parsed = value is num ? value.round() : int.tryParse('$value');
+    if (parsed == null) return null;
+    return parsed.clamp(0, 100).toInt();
+  }
+
+  String _jobStatusLabel(HermesJobStatus status) => switch (status) {
+        HermesJobStatus.accepted => '작업 접수',
+        HermesJobStatus.progress => '작업 진행 중',
+        HermesJobStatus.completed => '작업 완료',
+        HermesJobStatus.failed => '작업 실패',
+      };
+
   void _appendAssistantDelta(String delta) {
     final index = _messages.lastIndexWhere(
         (msg) => msg.role == HermesMessageRole.assistant && msg.pending);
@@ -242,6 +316,18 @@ class ChatController extends ChangeNotifier {
     }
     final current = _messages[index];
     _messages[index] = current.copyWith(text: current.text + delta);
+  }
+
+  void _clearPendingAssistantBubble() {
+    final index = _messages.lastIndexWhere(
+        (msg) => msg.role == HermesMessageRole.assistant && msg.pending);
+    if (index == -1) return;
+    final current = _messages[index];
+    if (current.text.trim().isEmpty) {
+      _messages.removeAt(index);
+    } else {
+      _messages[index] = current.copyWith(pending: false);
+    }
   }
 
   void _completeAssistantMessage(String text, {String? sessionId}) {

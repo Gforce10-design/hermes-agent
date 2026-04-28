@@ -284,6 +284,14 @@ class _MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (message.isJob) {
+      return _JobTimelineCard(
+        message: message,
+        onCopy: onCopy,
+        onReply: onReply,
+      );
+    }
+
     final isUser = message.role == HermesMessageRole.user;
     final alignment = isUser ? Alignment.centerRight : Alignment.centerLeft;
     final color = switch (message.role) {
@@ -357,6 +365,122 @@ class _MessageBubble extends StatelessWidget {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _JobTimelineCard extends StatelessWidget {
+  const _JobTimelineCard({
+    required this.message,
+    required this.onCopy,
+    required this.onReply,
+  });
+
+  final HermesMessage message;
+  final ValueChanged<HermesMessage> onCopy;
+  final ValueChanged<HermesMessage> onReply;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = message.jobStatus ?? HermesJobStatus.progress;
+    final colorScheme = Theme.of(context).colorScheme;
+    final accent = switch (status) {
+      HermesJobStatus.accepted => colorScheme.primary,
+      HermesJobStatus.progress => colorScheme.tertiary,
+      HermesJobStatus.completed => Colors.teal,
+      HermesJobStatus.failed => colorScheme.error,
+    };
+    final icon = switch (status) {
+      HermesJobStatus.accepted => Icons.playlist_add_check_circle_outlined,
+      HermesJobStatus.progress => Icons.sync,
+      HermesJobStatus.completed => Icons.check_circle_outline,
+      HermesJobStatus.failed => Icons.error_outline,
+    };
+    final label = switch (status) {
+      HermesJobStatus.accepted => '작업 접수',
+      HermesJobStatus.progress => '작업 진행 중',
+      HermesJobStatus.completed => '작업 완료',
+      HermesJobStatus.failed => '작업 실패',
+    };
+    final title = message.jobTitle?.trim().isNotEmpty == true
+        ? message.jobTitle!.trim()
+        : '작업';
+    final progress = message.jobProgress;
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 360),
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        decoration: BoxDecoration(
+          border: Border(left: BorderSide(color: accent, width: 4)),
+          borderRadius: BorderRadius.circular(16),
+          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.72),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, color: accent, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: accent,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  if (progress != null) ...[
+                    const Spacer(),
+                    Text('$progress%', style: const TextStyle(fontSize: 12)),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(title, style: Theme.of(context).textTheme.titleSmall),
+              if (message.jobId != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  '작업 ID: ${message.jobId}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+              if (progress != null) ...[
+                const SizedBox(height: 8),
+                LinearProgressIndicator(
+                  value: progress / 100,
+                  color: accent,
+                  backgroundColor: accent.withValues(alpha: 0.14),
+                ),
+              ],
+              if (message.text.trim().isNotEmpty) ...[
+                const SizedBox(height: 8),
+                SelectableText(message.text),
+              ],
+              const SizedBox(height: 6),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextButton.icon(
+                    onPressed: () => onReply(message),
+                    icon: const Icon(Icons.reply, size: 16),
+                    label: const Text('답장'),
+                  ),
+                  TextButton.icon(
+                    onPressed: () => onCopy(message),
+                    icon: const Icon(Icons.copy, size: 16),
+                    label: const Text('복사'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
