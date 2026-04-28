@@ -44,3 +44,14 @@ def test_sidebar_chat_nav_resumes_most_recent_session_instead_of_starting_fresh(
     assert "api.getSessions(1, 0)" in app
     assert "navigate(`/chat?resume=${encodeURIComponent(sessionId)}`)" in app
     assert "handleSidebarChatNav" in app
+
+
+def test_dashboard_api_and_chat_have_cookie_token_fallback():
+    api = (WEB_SRC / "lib" / "api.ts").read_text(encoding="utf-8")
+    chat = (WEB_SRC / "pages" / "ChatPage.tsx").read_text(encoding="utf-8")
+
+    assert "hermes_dashboard_session" in api
+    assert "getDashboardSessionToken" in api
+    assert "document.cookie" in api
+    assert "getDashboardSessionToken" in chat
+    assert "자동 연결 토큰" in chat

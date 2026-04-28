@@ -32,6 +32,7 @@ import { useSearchParams } from "react-router-dom";
 import { ChatSidebar } from "@/components/ChatSidebar";
 import { usePageHeader } from "@/contexts/usePageHeader";
 import { useI18n } from "@/i18n";
+import { getDashboardSessionToken } from "@/lib/api";
 
 function buildWsUrl(
   token: string,
@@ -119,8 +120,8 @@ export default function ChatPage() {
   // Lazy-init: the missing-token check happens at construction so the effect
   // body doesn't have to setState (React 19's set-state-in-effect rule).
   const [banner, setBanner] = useState<string | null>(() =>
-    typeof window !== "undefined" && !window.__HERMES_SESSION_TOKEN__
-      ? "Session token unavailable. Open this page through `hermes dashboard`, not directly."
+    typeof window !== "undefined" && !getDashboardSessionToken()
+      ? "자동 연결 토큰을 찾을 수 없습니다. Hermes 대시보드 주소로 다시 열어 주세요."
       : null,
   );
   const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
@@ -225,7 +226,7 @@ export default function ChatPage() {
     const host = hostRef.current;
     if (!host) return;
 
-    const token = window.__HERMES_SESSION_TOKEN__;
+    const token = getDashboardSessionToken();
     // Banner already initialised above; just bail before wiring xterm/WS.
     if (!token) {
       return;

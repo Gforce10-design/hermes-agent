@@ -72,6 +72,7 @@ app = FastAPI(title="Hermes Agent", version=__version__)
 # ---------------------------------------------------------------------------
 _SESSION_TOKEN = secrets.token_urlsafe(32)
 _SESSION_HEADER_NAME = "X-Hermes-Session-Token"
+_SESSION_COOKIE_NAME = "hermes_dashboard_session"
 
 # In-browser Chat tab (/chat, /api/pty, …).  Off unless ``hermes dashboard --tui``
 # or HERMES_DASHBOARD_TUI=1.  Set from :func:`start_server`.
@@ -106,6 +107,9 @@ _PUBLIC_API_PATHS: frozenset = frozenset({
     "/api/dashboard/themes",
     "/api/dashboard/plugins",
     "/api/dashboard/plugins/rescan",
+    "/api/mobile/bootstrap",
+    "/api/mobile/app-update",
+    "/api/mobile/app-release/apk",
 })
 
 
@@ -124,6 +128,13 @@ def _has_valid_session_token(request: Request) -> bool:
     ):
         return True
 
+    session_cookie = request.cookies.get(_SESSION_COOKIE_NAME, "")
+    if session_cookie and hmac.compare_digest(
+        session_cookie.encode(),
+        _SESSION_TOKEN.encode(),
+    ):
+        return True
+
     auth = request.headers.get("authorization", "")
     expected = f"Bearer {_SESSION_TOKEN}"
     return hmac.compare_digest(auth.encode(), expected.encode())
@@ -138,7 +149,10 @@ def _require_token(request: Request) -> None:
 def _has_valid_ws_token(ws: WebSocket) -> bool:
     """True when a WebSocket carries the dashboard session token."""
     token = ws.query_params.get("token", "")
-    return hmac.compare_digest(token.encode(), _SESSION_TOKEN.encode())
+    if token and hmac.compare_digest(token.encode(), _SESSION_TOKEN.encode()):
+        return True
+    cookie_token = ws.cookies.get(_SESSION_COOKIE_NAME, "")
+    return hmac.compare_digest(cookie_token.encode(), _SESSION_TOKEN.encode())
 
 
 # Accepted Host header values for loopback binds. DNS rebinding attacks
@@ -2362,37 +2376,240 @@ async def get_usage_analytics(days: int = 30):
         db.close()
 
 
+def _mobile_model_config(config: Dict[str, Any]) -> tuple[str, str]:
+    model_cfg = config.get("model") if isinstance(config, dict) else {}
+    if isinstance(model_cfg, dict):
+        provider = str(model_cfg.get("provider") or "openai-codex").strip() or "openai-codex"
+        model = str(model_cfg.get("default") or model_cfg.get("model") or "gpt-5.5").strip() or "gpt-5.5"
+        return provider, model
+    if isinstance(model_cfg, str) and model_cfg.strip():
+        return "openai-codex", model_cfg.strip()
+    return "openai-codex", "gpt-5.5"
+
+
+def _mobile_fallback_config(config: Dict[str, Any]) -> list[Dict[str, str]]:
+    fallback = config.get("fallback_providers") or config.get("fallback_model") or []
+    if isinstance(fallback, dict):
+        fallback = [fallback]
+    if not isinstance(fallback, list):
+        fallback = []
+    normalized: list[Dict[str, str]] = []
+    for item in fallback:
+        if not isinstance(item, dict):
+            continue
+        provider = str(item.get("provider") or "").strip()
+        model = str(item.get("model") or "").strip()
+        if provider and model:
+            if provider in {"claude-code", "claude_code", "claude-code-cli", "claude_code_cli"} and model in {"opus4.7", "opus4-7"}:
+                model = "opus"
+            normalized.append({"provider": provider, "model": model})
+    return normalized or [{"provider": "claude-code", "model": "opus"}]
+
+
+def _extract_mobile_text(result: Any) -> str:
+    if isinstance(result, dict):
+        return str(result.get("final_response") or result.get("response") or "")
+    return str(result or "")
+
+
 async def _run_mobile_prompt(prompt: str, session_id: Optional[str] = None) -> Dict[str, Any]:
     """Run one Hermes prompt for the mobile WebSocket API.
 
-    The mobile MVP uses a structured JSON contract rather than PTY bytes.  We
-    return the complete response as a single delta now; the contract leaves room
-    to stream finer-grained deltas later without changing the Flutter client.
+    Mobile uses Codex OAuth as the primary path and Claude Code CLI Opus 4.7
+    as the recovery path.  Empty primary responses are treated as failures so
+    the app does not show a blank assistant message.
     """
     from run_agent import AIAgent
 
-    def _run() -> Dict[str, Any]:
+    def _run_agent(
+        provider: str,
+        model: str,
+        fallback_model: list[Dict[str, str]] | None,
+        agent_holder: dict[str, Any] | None = None,
+    ) -> Dict[str, Any]:
         agent = AIAgent(
+            provider=provider,
+            model=model,
             quiet_mode=True,
             platform="mobile",
             session_id=session_id,
+            fallback_model=fallback_model or [],
         )
+        if agent_holder is not None:
+            agent_holder["agent"] = agent
         result = agent.run_conversation(prompt)
-        if isinstance(result, dict):
-            text = str(result.get("final_response") or result.get("response") or "")
-        else:
-            text = str(result)
         return {
             "session_id": getattr(agent, "session_id", None) or session_id,
-            "text": text,
-            "model": getattr(agent, "model", None),
+            "text": _extract_mobile_text(result),
+            "model": getattr(agent, "model", None) or model,
         }
+
+    def _run() -> Dict[str, Any]:
+        import queue
+        import threading
+
+        config = load_config()
+        provider, model = _mobile_model_config(config)
+        fallback_model = _mobile_fallback_config(config)
+        timeout_seconds = float(os.environ.get("HERMES_MOBILE_PRIMARY_TIMEOUT_SECONDS", "12"))
+        result_queue: queue.Queue[tuple[str, Any]] = queue.Queue(maxsize=1)
+        primary_holder: dict[str, Any] = {}
+
+        def _primary_worker() -> None:
+            try:
+                result_queue.put(("ok", _run_agent(provider, model, fallback_model, primary_holder)), block=False)
+            except Exception as exc:  # pragma: no cover - exercised through fallback behavior
+                result_queue.put(("error", exc), block=False)
+
+        primary_thread = threading.Thread(target=_primary_worker, name="mobile-primary", daemon=True)
+        primary_thread.start()
+        timed_out = False
+        try:
+            status, value = result_queue.get(timeout=timeout_seconds)
+        except queue.Empty:
+            timed_out = True
+            agent = primary_holder.get("agent")
+            if agent is not None and hasattr(agent, "interrupt"):
+                agent.interrupt("Mobile primary timed out before fallback")
+            primary_thread.join(timeout=1.0)
+            _log.warning("Mobile primary timed out after %.1fs", timeout_seconds)
+            if primary_thread.is_alive():
+                return {
+                    "session_id": session_id,
+                    "text": "주 모델 응답이 지연되어 중복 실행 방지를 위해 중단했습니다. 잠시 후 다시 시도해 주세요.",
+                    "model": model,
+                }
+            try:
+                status, value = result_queue.get_nowait()
+            except queue.Empty:
+                primary = {"text": ""}
+            else:
+                primary = value if status == "ok" else {"text": ""}
+        else:
+            if status == "error":
+                _log.warning("Mobile primary failed; switching to fallback", exc_info=value)
+                primary = {"text": ""}
+            else:
+                primary = value
+        if primary.get("text", "").strip():
+            return primary
+
+        fallback = fallback_model[0]
+        reason = "timed out" if timed_out else "returned empty response"
+        _log.warning("Mobile primary %s; switching to fallback provider=%s model=%s", reason, fallback["provider"], fallback["model"])
+        return _run_agent(fallback["provider"], fallback["model"], [])
 
     return await asyncio.to_thread(_run)
 
 
-async def _send_mobile_error(ws: WebSocket, message: str) -> None:
-    await ws.send_json({"type": "error", "message": message})
+async def _safe_send_mobile_json(ws: WebSocket, payload: dict[str, Any]) -> bool:
+    try:
+        await ws.send_json(payload)
+        return True
+    except WebSocketDisconnect:
+        return False
+    except Exception as exc:
+        if exc.__class__.__name__ == "ClientDisconnected":
+            return False
+        raise
+
+
+async def _send_mobile_error(ws: WebSocket, message: str) -> bool:
+    return await _safe_send_mobile_json(ws, {"type": "error", "message": message})
+
+
+def _mobile_access_secret_pair() -> tuple[str, str]:
+    """Return the server-side mobile Access service-token pair, if configured."""
+    client_id = (
+        os.environ.get("HERMES_CLOUDFLARE_ACCESS_CLIENT_ID")
+        or os.environ.get("CLOUDFLARE_ACCESS_CLIENT_ID")
+        or os.environ.get("CF_ACCESS_CLIENT_ID")
+        or ""
+    ).strip()
+    client_secret = (
+        os.environ.get("HERMES_CLOUDFLARE_ACCESS_CLIENT_SECRET")
+        or os.environ.get("CLOUDFLARE_ACCESS_CLIENT_SECRET")
+        or os.environ.get("CF_ACCESS_CLIENT_SECRET")
+        or ""
+    ).strip()
+    return client_id, client_secret
+
+
+def _has_valid_mobile_access_headers(request: Request) -> bool:
+    # The mobile bootstrap may reveal the ephemeral WebSocket session token, so
+    # do not trust unauthenticated/public headers.  Accept only the dashboard
+    # session token path or an origin-side configured Cloudflare Access service
+    # token pair that exactly matches the request headers.
+    expected_id, expected_secret = _mobile_access_secret_pair()
+    if not expected_id or not expected_secret:
+        return False
+    supplied_id = request.headers.get("CF-Access-Client-Id", "").strip()
+    supplied_secret = request.headers.get("CF-Access-Client-Secret", "").strip()
+    return hmac.compare_digest(supplied_id.encode(), expected_id.encode()) and hmac.compare_digest(
+        supplied_secret.encode(), expected_secret.encode()
+    )
+
+
+@app.get("/api/mobile/bootstrap")
+async def mobile_bootstrap(request: Request) -> Dict[str, Any]:
+    """Return the native mobile WebSocket URL without exposing it to anonymous callers."""
+    if not (_has_valid_session_token(request) or _has_valid_mobile_access_headers(request)):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return {"mobile_ws_url": f"/api/mobile/ws?token={_SESSION_TOKEN}"}
+
+
+def _mobile_release_apk_path() -> Path:
+    configured = os.environ.get("HERMES_MOBILE_APK_PATH", "").strip()
+    candidates = [
+        Path(configured) if configured else None,
+        Path("/mnt/c/Users/sudol/Downloads/hermes-mobile-arm64-latest-release.apk"),
+        PROJECT_ROOT / "mobile/hermes_mobile/build/app/outputs/flutter-apk/app-release.apk",
+    ]
+    for candidate in candidates:
+        if candidate and candidate.exists():
+            return candidate
+    return Path(configured) if configured else PROJECT_ROOT / "mobile/hermes_mobile/build/app/outputs/flutter-apk/app-release.apk"
+
+
+def _mobile_pubspec_version() -> tuple[str, int]:
+    pubspec = PROJECT_ROOT / "mobile/hermes_mobile/pubspec.yaml"
+    try:
+        for line in pubspec.read_text(encoding="utf-8").splitlines():
+            if line.startswith("version:"):
+                raw = line.split(":", 1)[1].strip()
+                version, _, build = raw.partition("+")
+                return version, int(build or "0")
+    except Exception:
+        pass
+    return "0.0.0", 0
+
+
+@app.get("/api/mobile/app-update")
+async def mobile_app_update(request: Request) -> Dict[str, Any]:
+    """Return latest mobile APK metadata for in-app update checks."""
+    version, build = _mobile_pubspec_version()
+    base_url = str(request.base_url).rstrip("/")
+    apk = _mobile_release_apk_path()
+    return {
+        "version": version,
+        "build": build,
+        "apk_url": f"{base_url}/api/mobile/app-release/apk",
+        "available": apk.exists(),
+        "notes": "기존 앱을 삭제하지 말고 Android 설치 화면에서 업데이트를 선택하세요.",
+    }
+
+
+@app.get("/api/mobile/app-release/apk")
+async def mobile_app_release_apk() -> FileResponse:
+    """Serve the latest Android release APK for mobile in-place updates."""
+    apk = _mobile_release_apk_path()
+    if not apk.exists():
+        raise HTTPException(status_code=404, detail="Mobile APK is not available")
+    return FileResponse(
+        apk,
+        media_type="application/vnd.android.package-archive",
+        filename="hermes-mobile-arm64-latest-release.apk",
+    )
 
 
 @app.websocket("/api/mobile/ws")
@@ -2428,22 +2645,26 @@ async def mobile_ws(ws: WebSocket) -> None:
             if session_id is not None:
                 session_id = str(session_id)
 
-            await ws.send_json({"type": "message.start", "session_id": session_id})
+            if not await _safe_send_mobile_json(ws, {"type": "message.start", "session_id": session_id}):
+                return
             try:
                 result = await _run_mobile_prompt(text, session_id=session_id)
             except Exception:
                 _log.exception("Mobile prompt failed")
-                await _send_mobile_error(ws, "Mobile prompt failed")
+                if not await _send_mobile_error(ws, "Mobile prompt failed"):
+                    return
                 continue
 
             response_text = str(result.get("text") or "")
-            await ws.send_json({"type": "message.delta", "text": response_text})
-            await ws.send_json({
+            if not await _safe_send_mobile_json(ws, {"type": "message.delta", "text": response_text}):
+                return
+            if not await _safe_send_mobile_json(ws, {
                 "type": "message.complete",
                 "session_id": result.get("session_id") or session_id,
                 "text": response_text,
                 "model": result.get("model"),
-            })
+            }):
+                return
     finally:
         try:
             await ws.close()
@@ -2859,7 +3080,7 @@ def mount_spa(application: FastAPI):
 
     _index_path = WEB_DIST / "index.html"
 
-    def _serve_index():
+    def _serve_index(request: Request):
         """Return index.html with the session token injected."""
         html = _index_path.read_text()
         chat_js = "true" if _DASHBOARD_EMBEDDED_CHAT_ENABLED else "false"
@@ -2868,15 +3089,24 @@ def mount_spa(application: FastAPI):
             f"window.__HERMES_DASHBOARD_EMBEDDED_CHAT__={chat_js};</script>"
         )
         html = html.replace("</head>", f"{token_script}</head>", 1)
-        return HTMLResponse(
+        response = HTMLResponse(
             html,
             headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
         )
+        forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip().lower()
+        response.set_cookie(
+            _SESSION_COOKIE_NAME,
+            _SESSION_TOKEN,
+            httponly=True,
+            samesite="lax",
+            secure=request.url.scheme == "https" or forwarded_proto == "https",
+        )
+        return response
 
     application.mount("/assets", StaticFiles(directory=WEB_DIST / "assets"), name="assets")
 
     @application.get("/{full_path:path}")
-    async def serve_spa(full_path: str):
+    async def serve_spa(full_path: str, request: Request):
         file_path = WEB_DIST / full_path
         # Prevent path traversal via url-encoded sequences (%2e%2e/)
         if (
@@ -2886,7 +3116,7 @@ def mount_spa(application: FastAPI):
             and file_path.is_file()
         ):
             return FileResponse(file_path)
-        return _serve_index()
+        return _serve_index(request)
 
 
 # ---------------------------------------------------------------------------

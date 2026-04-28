@@ -975,6 +975,9 @@ class AIAgent:
         self.acp_args = list(acp_args or args or [])
         if api_mode in {"chat_completions", "codex_responses", "anthropic_messages", "bedrock_converse"}:
             self.api_mode = api_mode
+        elif self.provider in {"claude-code", "claude_code", "claude-code-cli", "claude_code_cli"}:
+            self.provider = "claude-code"
+            self.api_mode = "chat_completions"
         elif self.provider == "openai-codex":
             self.api_mode = "codex_responses"
         elif self.provider == "xai":
@@ -1239,7 +1242,14 @@ class AIAgent:
         # Claude uses its own timeout path and is not covered here.
         _provider_timeout = get_provider_request_timeout(self.provider, self.model)
 
-        if self.api_mode == "anthropic_messages":
+        if self.provider == "claude-code":
+            self.api_key = ""
+            self.client = None
+            self._client_kwargs = {}
+            self._disable_streaming = True
+            if not self.quiet_mode:
+                print(f"🤖 AI Agent initialized with model: {self.model} (Claude Code CLI)")
+        elif self.api_mode == "anthropic_messages":
             from agent.anthropic_adapter import build_anthropic_client, resolve_anthropic_token
             # Bedrock + Claude → use AnthropicBedrock SDK for full feature parity
             # (prompt caching, thinking budgets, adaptive thinking).
@@ -1987,6 +1997,7 @@ class AIAgent:
             "api_mode": self.api_mode,
             "api_key": getattr(self, "api_key", ""),
             "client_kwargs": dict(self._client_kwargs),
+            "disable_streaming": bool(getattr(self, "_disable_streaming", False)),
             "use_prompt_caching": self._use_prompt_caching,
             "use_native_cache_layout": self._use_native_cache_layout,
             # Context engine state that _try_activate_fallback() overwrites.
@@ -2171,6 +2182,7 @@ class AIAgent:
             "api_mode": self.api_mode,
             "api_key": getattr(self, "api_key", ""),
             "client_kwargs": dict(self._client_kwargs),
+            "disable_streaming": bool(getattr(self, "_disable_streaming", False)),
             "use_prompt_caching": self._use_prompt_caching,
             "use_native_cache_layout": self._use_native_cache_layout,
             "compressor_model": getattr(_cc, "model", self.model) if _cc else self.model,
@@ -5653,7 +5665,15 @@ class AIAgent:
 
         def _call():
             try:
-                if self.api_mode == "codex_responses":
+                if self.provider == "claude-code":
+                    from agent.claude_code_cli import run_claude_code_cli
+                    result["response"] = run_claude_code_cli(
+                        api_kwargs.get("messages", []),
+                        model=self.model,
+                        command=getattr(self, "acp_command", None) or "claude",
+                        timeout=get_provider_request_timeout(self.provider, self.model),
+                    )
+                elif self.api_mode == "codex_responses":
                     request_client_holder["client"] = self._create_request_openai_client(reason="codex_stream_request")
                     result["response"] = self._run_codex_stream(
                         api_kwargs,
@@ -5894,6 +5914,9 @@ class AIAgent:
         Falls back to _interruptible_api_call on provider errors indicating
         streaming is not supported.
         """
+        if self.provider == "claude-code":
+            return self._interruptible_api_call(api_kwargs)
+
         if self.api_mode == "codex_responses":
             # Codex streams internally via _run_codex_stream. The main dispatch
             # in _interruptible_api_call already calls it; we just need to
@@ -6741,6 +6764,41 @@ class AIAgent:
         if not fb_provider or not fb_model:
             return self._try_activate_fallback()  # skip invalid, try next
 
+        # Claude Code CLI is a local subprocess runtime, not an OpenAI-wire
+        # provider. Activate it directly instead of asking the API provider
+        # resolver for an HTTP client.
+        if fb_provider in {"claude-code", "claude_code", "claude-code-cli", "claude_code_cli"}:
+            old_model = self.model
+            self.model = fb_model
+            self.provider = "claude-code"
+            self.base_url = ""
+            self.api_mode = "chat_completions"
+            self.api_key = ""
+            self.client = None
+            self._client_kwargs = {}
+            self._disable_streaming = True
+            if hasattr(self, "_transport_cache"):
+                self._transport_cache.clear()
+            self._fallback_activated = True
+            self._use_prompt_caching, self._use_native_cache_layout = (False, False)
+            if hasattr(self, 'context_compressor') and self.context_compressor:
+                self.context_compressor.update_model(
+                    model=self.model,
+                    context_length=getattr(self.context_compressor, "context_length", 200000),
+                    base_url="",
+                    api_key="",
+                    provider=self.provider,
+                )
+            self._emit_status(
+                f"🔄 Primary model failed — switching to fallback: "
+                f"{fb_model} via claude-code"
+            )
+            logging.info(
+                "Fallback activated: %s → %s (claude-code)",
+                old_model, fb_model,
+            )
+            return True
+
         # Use centralized router for client construction.
         # raw_codex=True because the main agent needs direct responses.stream()
         # access for Codex providers.
@@ -6928,6 +6986,7 @@ class AIAgent:
                 self._transport_cache.clear()
             self.api_key = rt["api_key"]
             self._client_kwargs = dict(rt["client_kwargs"])
+            self._disable_streaming = bool(rt.get("disable_streaming", False))
             self._use_prompt_caching = rt["use_prompt_caching"]
             # Default to native layout when the restored snapshot predates the
             # native-vs-proxy split (older sessions saved before this PR).

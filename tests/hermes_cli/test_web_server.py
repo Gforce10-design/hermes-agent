@@ -391,6 +391,48 @@ class TestWebServerEndpoints:
         resp = unauth_client.get("/api/status")
         assert resp.status_code == 200
 
+    def test_spa_index_sets_dashboard_session_cookie(self):
+        """Serving the dashboard page should also persist the ephemeral token as a cookie."""
+        from starlette.testclient import TestClient
+        from hermes_cli.web_server import app, _SESSION_COOKIE_NAME
+
+        resp = TestClient(app).get("/")
+
+        assert resp.status_code == 200
+        assert resp.cookies.get(_SESSION_COOKIE_NAME)
+
+    def test_protected_api_accepts_dashboard_session_cookie(self):
+        """Browser sessions should not need users to manually enter the session token."""
+        from starlette.testclient import TestClient
+        from hermes_cli.web_server import app, _SESSION_COOKIE_NAME, _SESSION_TOKEN
+
+        cookie_client = TestClient(app)
+        cookie_client.cookies.set(_SESSION_COOKIE_NAME, _SESSION_TOKEN)
+
+        resp = cookie_client.get("/api/config")
+
+        assert resp.status_code == 200
+
+    def test_protected_api_rejects_bad_dashboard_session_cookie(self):
+        from starlette.testclient import TestClient
+        from hermes_cli.web_server import app, _SESSION_COOKIE_NAME
+
+        cookie_client = TestClient(app)
+        cookie_client.cookies.set(_SESSION_COOKIE_NAME, "wrong-token")
+
+        resp = cookie_client.get("/api/config")
+
+        assert resp.status_code == 401
+
+    def test_pty_websocket_accepts_dashboard_session_cookie(self):
+        from hermes_cli.web_server import _has_valid_ws_token, _SESSION_COOKIE_NAME, _SESSION_TOKEN
+
+        class FakeWebSocket:
+            query_params = {}
+            cookies = {_SESSION_COOKIE_NAME: _SESSION_TOKEN}
+
+        assert _has_valid_ws_token(FakeWebSocket()) is True
+
     def test_path_traversal_blocked(self):
         """Verify URL-encoded path traversal is blocked."""
         # %2e%2e = ..

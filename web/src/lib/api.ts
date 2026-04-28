@@ -11,6 +11,20 @@ declare global {
 }
 let _sessionToken: string | null = null;
 const SESSION_HEADER = "X-Hermes-Session-Token";
+const SESSION_COOKIE = "hermes_dashboard_session";
+
+export function getDashboardSessionToken(): string | null {
+  if (typeof window !== "undefined" && window.__HERMES_SESSION_TOKEN__) {
+    return window.__HERMES_SESSION_TOKEN__;
+  }
+  if (typeof document === "undefined") return null;
+  const prefix = `${SESSION_COOKIE}=`;
+  const raw = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(prefix));
+  return raw ? decodeURIComponent(raw.slice(prefix.length)) : null;
+}
 
 function setSessionHeader(headers: Headers, token: string): void {
   if (!headers.has(SESSION_HEADER)) {
@@ -21,7 +35,7 @@ function setSessionHeader(headers: Headers, token: string): void {
 export async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
   // Inject the session token into all /api/ requests.
   const headers = new Headers(init?.headers);
-  const token = window.__HERMES_SESSION_TOKEN__;
+  const token = getDashboardSessionToken();
   if (token) {
     setSessionHeader(headers, token);
   }
@@ -35,9 +49,9 @@ export async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> 
 
 async function getSessionToken(): Promise<string> {
   if (_sessionToken) return _sessionToken;
-  const injected = window.__HERMES_SESSION_TOKEN__;
-  if (injected) {
-    _sessionToken = injected;
+  const token = getDashboardSessionToken();
+  if (token) {
+    _sessionToken = token;
     return _sessionToken;
   }
   throw new Error("Session token not available — page must be served by the Hermes dashboard server");
