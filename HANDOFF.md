@@ -1,38 +1,59 @@
 # hermes-agent HANDOFF
 
-> 최종 갱신: 2026-04-25
-> 브랜치: main
-> 최근 커밋: 20223475 `chore: remove OpenClaw migration leftovers`
+> 최종 갱신: 2026-04-29 21:47 KST
+> 브랜치: dev
+> 최근 커밋: 이 HANDOFF 포함 세이브 커밋 (`git log -1` 기준)
 
 ## 현재 상태
-- Hermes Telegram 메뉴 설명 한글화 코드와 테스트가 fork `main`에 반영되어 푸시되었습니다.
-- 실제 Telegram Bot 메뉴는 100개로 복구되었고 비한글 설명은 0개입니다.
-- gateway restart drain 기본값은 600초, user systemd unit `TimeoutStopSec`는 630초로 맞춰졌습니다.
-- Hermes gateway는 현재 active 상태입니다.
-- 안전 UX 프리필은 `~/.hermes/prefill-safe-korean-ux.json` 및 `~/.hermes/config.yaml`에 반영되어 있습니다.
-- Desktop/G3에는 `C:\Users\sudol\.hermes\hermes-agent` 경로로 fork `main`이 동기화되어 있습니다.
+- Hermes `/work` 하네스 적용 계획 v2가 Obsidian raw/dev에 저장되었습니다.
+- `/work`는 Work Micro-Router로 정의되었습니다.
+- micro-router는 작업 난이도·작업량·현재 상태·위험도·신규성·영향 범위에 따라 필요한 기능만 선택 실행합니다.
+- v2 계획은 기존 v1 raw 파일을 수정하지 않고 새 파일로 생성했습니다.
+- Hermes 코드 변경, `/work` 명령 구현, 스킬 생성, 배포, 서비스 재시작, 시스템 재부팅은 아직 수행하지 않았습니다.
 
 ## 직전 세션 작업
-1. `hermes_cli/commands.py`의 core slash command 설명을 한국어로 변경했습니다.
-2. Telegram 메뉴 plugin/skill 설명의 한글 fallback을 추가했습니다.
-3. gateway restart drain timeout 기본값과 systemd unit 테스트를 600/630초 기준으로 갱신했습니다.
-4. `hermes_cli/main.py`의 gateway restart drain fallback/comment도 600초 기준으로 맞췄습니다.
-5. 관련 테스트를 추가/수정하고 234개 targeted test를 통과시켰습니다.
-6. Obsidian 자료를 기반으로 `alphamate-auto-save`, `alphamate-verify` Hermes 스킬을 생성했습니다.
-7. `feat/gateway-arbiter`에서 OpenClaw 잔여 변경을 제외해 `main`에 깨끗하게 반영했습니다.
-8. 기존 OpenClaw migration 잔여 파일 6개를 삭제했습니다.
+1. 기존 `/work` 하네스 적용 계획 v1을 확인했습니다.
+2. 사용자 의견을 반영해 `/work` 내부 엔진을 마이크로 기능 단위로 세분화했습니다.
+3. 다음 기능군을 계획에 반영했습니다.
+   - `inspect-*`
+   - `brainstorm-*`
+   - `dualmind-*`
+   - `patch-*`
+   - `deliver-*`
+   - `deep-*`
+   - `review-*`
+   - `test-*`
+   - `release-*`
+4. 코드리뷰 강도를 `review-none / review-lite / review-standard / review-strict / review-redteam`으로 분리했습니다.
+5. 테스트 강도를 `test-none / test-compile / test-targeted / test-smoke / test-full / test-live-observe`로 분리했습니다.
+6. v2 계획 파일을 저장하고 읽기로 검증했습니다.
+7. 세이브 파일을 생성했습니다.
+8. 사용자 지적에 따라 WORKLOG/HANDOFF 누락을 보강했습니다.
 
-## 인터페이스 변경 (다른 프로젝트 영향)
-- Telegram BotCommand 설명이 한국어로 표시됩니다.
-- BotCommand 이름은 영어/underscore 규칙을 유지합니다.
-- Telegram 메뉴에 표시되는 skill/plugin 설명은 영어 metadata 대신 `스킬 실행: <name>` fallback을 사용할 수 있습니다.
-- gateway restart drain 기본값이 600초로 늘어나, 계획된 gateway stop/restart가 더 오래 기다릴 수 있습니다.
+## 관련 산출물
+- Obsidian v1 계획:
+  - `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-04-29-work-harness-application-plan.md`
+- Obsidian v2 계획:
+  - `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-04-29-work-harness-granular-routing-plan.md`
+- Obsidian 세이브 기록:
+  - `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-04-29-work-harness-granular-routing-save.md`
+
+## 검증
+- v2 계획 파일: 392줄, 16,418 bytes 확인
+- 세이브 파일: 75줄, 2,545 bytes 확인
+- 현재 머신: A8Max
+- G3 서비스 재시작 없음
+- 시스템 재부팅 없음
+- 배포 없음
 
 ## 다음에 할 것
-- Hermes gateway Telegram 상태 메시지 UX 개선(단일 한국어 상태 줄) 작업은 별도 계획 후 진행.
-- 운영 서비스 재시작이 필요한 작업은 반드시 별도 승인 후 수행합니다.
-- `/auto-save` 사용 시 WORKLOG/HANDOFF/Obsidian 저장을 먼저 반영하고 커밋해야 합니다.
+1. 사용자 승인 후 `hermes-risk-based-work-router` 스킬을 생성합니다.
+2. 샘플 요청 12개 라우팅 테스트를 작성합니다.
+3. 라우팅 결과를 검증하고 규칙을 보정합니다.
+4. 필요 시 Hermes 코드 연결 계획을 별도로 작성합니다.
+5. 코드 변경은 별도 승인 후 진행합니다.
 
 ## 알려진 이슈
-- gateway 재시작은 현재 대화 작업을 끊을 수 있으므로 명시 승인 후 수행해야 합니다.
-- AlphaVaults CLI query는 현재 `alphavaults-out` 데이터 없음 메시지를 반환합니다.
+- 이번 세이브에서 처음에는 Obsidian save note만 작성하고 WORKLOG/HANDOFF를 누락했습니다. 이후 사용자 지적으로 보강했습니다.
+- auto-save 요청 시에는 save note뿐 아니라 해당 프로젝트의 WORKLOG/HANDOFF까지 함께 갱신해야 합니다.
+- `/work` micro-router는 아직 계획 단계이며 실제 Hermes 명령이나 스킬로 구현되지 않았습니다.

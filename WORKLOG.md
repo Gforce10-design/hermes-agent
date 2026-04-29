@@ -1,5 +1,29 @@
 # hermes-agent WORKLOG
 
+## 2026-04-29 세션 1: `/work` 하네스 세분화 라우팅 계획 v2 저장
+
+### 작업 내용
+- Hermes `/work` 하네스 적용 계획을 v1에서 v2로 확장했습니다.
+- `/work`를 단순 `patch / deliver / deliver-deep / release` 선택기가 아니라 Work Micro-Router로 정의했습니다.
+- 엔진별 하위 기능을 `inspect-*`, `brainstorm-*`, `dualmind-*`, `patch-*`, `deliver-*`, `deep-*`, `review-*`, `test-*`, `release-*`로 세분화했습니다.
+- 가벼운 코드리뷰(`review-lite`)부터 독립 리뷰(`review-standard`), xrev식 엄격 검토(`review-strict`), redteam 검토까지 리뷰 강도를 분리했습니다.
+- Obsidian raw/dev에 v2 계획과 세이브 기록을 새 파일로 저장했습니다.
+
+### 핵심 결정
+- `/work`는 canonical delivery router이며, 작업마다 “가장 싼 충분한 검증 경로”를 선택해야 합니다.
+- 모든 작업에 무거운 절차를 적용하지 않고, 난이도·작업량·현재 상태·신규성·영향 범위에 따라 필요한 기능만 실행합니다.
+- 처음 생성/처음 설계/새 운영 루틴은 DualMind 후보로 분류합니다.
+- 서비스 재시작, 시스템 재부팅, 배포, 금융/자동매매 영향은 명시 승인 게이트로 둡니다.
+- auto-save는 단순 save note만이 아니라 WORKLOG/HANDOFF까지 갱신해야 합니다.
+
+### 검증
+- v2 계획 파일 검증: `raw/dev/hermes-2026-04-29-work-harness-granular-routing-plan.md` → 392줄, 16,418 bytes
+- 세이브 파일 검증: `raw/dev/hermes-2026-04-29-work-harness-granular-routing-save.md` → 75줄, 2,545 bytes
+- Hermes 코드 변경 없음
+- G3 서비스 재시작/시스템 재부팅/배포 없음
+
+---
+
 ## 2026-04-25 세션 1: Telegram 메뉴 한글화와 gateway 재시작 안정화
 
 ### 작업 내용
