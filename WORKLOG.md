@@ -1,5 +1,31 @@
 # hermes-agent WORKLOG
 
+## 2026-04-29 세션 2: `hermes-risk-based-work-router` 스킬 v2 업데이트
+
+### 작업 내용
+- 기존 `hermes-risk-based-work-router` 스킬을 확인하고 v2.0.0으로 업데이트했습니다.
+- `/work`를 Work Micro-Router로 처리하도록 스킬에 반영했습니다.
+- 작업 종류·신규성·난이도·작업량·현재 상태·영향 범위·검증 가능성 기준을 명시했습니다.
+- 마이크로 게이트 카탈로그를 스킬에 반영했습니다.
+  - `inspect-*`, `brainstorm-*`, `dualmind-*`, `patch-*`, `deliver-*`, `deep-*`, `review-*`, `test-*`, `release-*`
+- 샘플 요청 15개 라우팅 검증표를 `references/sample-routing-verification.md`로 추가했습니다.
+- Obsidian raw/dev에 스킬 작업 세이브 기록을 생성했습니다.
+
+### 핵심 결정
+- `/work`는 고정 7단계 절차가 아니라 최소 충분 게이트를 선택하는 라우터입니다.
+- L0~L2는 과한 리뷰/DualMind 없이 가볍게 처리합니다.
+- L4~L6은 운영/서비스/배포/자동복구 위험에 따라 스모크, 독립 리뷰, strict examiner, release gate로 승격합니다.
+- 서비스 재시작과 시스템 재부팅은 명시 승인 gate로 분리합니다.
+
+### 검증
+- `skill_view('hermes-risk-based-work-router')`로 v2.0.0 내용 확인 완료
+- `references/sample-routing-verification.md` linked file 확인 완료
+- 샘플 요청 15개 모두 PASS
+- Hermes 코드 변경 없음
+- G3 서비스 재시작/시스템 재부팅/배포 없음
+
+---
+
 ## 2026-04-29 세션 1: `/work` 하네스 세분화 라우팅 계획 v2 저장
 
 ### 작업 내용
