@@ -84,6 +84,15 @@ class TestCommandRegistry:
             assert not (cmd.cli_only and cmd.gateway_only), \
                 f"{cmd.name} cannot be both cli_only and gateway_only"
 
+    def test_work_command_is_registered_as_harness_router(self):
+        work = resolve_command("/work")
+
+        assert work is not None
+        assert work.name == "work"
+        assert work.category == "Tools & Skills"
+        assert "작업" in work.description
+        assert "라우팅" in work.description
+
 
 # ---------------------------------------------------------------------------
 # resolve_command tests
@@ -232,6 +241,12 @@ class TestTelegramBotCommands:
             if cmd.cli_only and not cmd.gateway_config_gate:
                 tg_name = cmd.name.replace("-", "_")
                 assert tg_name not in names
+
+    def test_includes_work_router_command(self):
+        commands = dict(telegram_bot_commands())
+
+        assert "work" in commands
+        assert "작업" in commands["work"]
 
 
 class TestSlackSubcommandMap:

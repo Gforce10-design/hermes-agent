@@ -3772,6 +3772,24 @@ class GatewayRunner:
         if canonical == "btw":
             return await self._handle_btw_command(event)
 
+        if canonical == "work":
+            try:
+                from agent.skill_commands import build_skill_invocation_message
+                user_instruction = event.get_command_args().strip()
+                msg = build_skill_invocation_message(
+                    "/hermes-risk-based-work-router",
+                    user_instruction,
+                    task_id=_quick_key,
+                )
+            except Exception as exc:
+                logger.debug("/work router skill load failed: %s", exc)
+                msg = None
+            if not msg or msg.startswith("[Failed to load skill:"):
+                return "Failed to load /work router skill. Check that hermes-risk-based-work-router is installed."
+            event.text = msg
+            command = None
+            canonical = None
+
         if canonical == "steer":
             # No active agent — /steer has no tool call to inject into.
             # Strip the prefix so downstream treats it as a normal user

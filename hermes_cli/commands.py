@@ -149,6 +149,8 @@ COMMAND_REGISTRY: list[CommandDef] = [
                cli_only=True),
     CommandDef("reload-mcp", "설정에서 MCP 서버 다시 불러오기", "Tools & Skills",
                aliases=("reload_mcp",)),
+    CommandDef("work", "작업 위험도 기반 라우팅", "Tools & Skills",
+               args_hint="<요청>"),
     CommandDef("browser", "CDP로 현재 Chrome에 브라우저 도구 연결", "Tools & Skills",
                cli_only=True, args_hint="[connect|disconnect|status]",
                subcommands=("connect", "disconnect", "status")),

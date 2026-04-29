@@ -6049,6 +6049,20 @@ class HermesCLI:
         elif canonical == "skills":
             with self._busy_command(self._slow_command_status(cmd_original)):
                 self._handle_skills_command(cmd_original)
+        elif canonical == "work":
+            parts = cmd_original.split(maxsplit=1)
+            user_instruction = parts[1].strip() if len(parts) > 1 else ""
+            msg = build_skill_invocation_message(
+                "/hermes-risk-based-work-router",
+                user_instruction,
+                task_id=self.session_id,
+            )
+            if msg and not msg.startswith("[Failed to load skill:"):
+                print("\n⚡ Loading skill: hermes-risk-based-work-router")
+                if hasattr(self, '_pending_input'):
+                    self._pending_input.put(msg)
+            else:
+                ChatConsole().print("[bold red]Failed to load /work router skill[/]")
         elif canonical == "platforms":
             self._show_gateway_status()
         elif canonical == "status":

@@ -1,5 +1,31 @@
 # hermes-agent WORKLOG
 
+## 2026-04-29 세션 3: `/work` slash command 코드 연결
+
+### 작업 내용
+- `/work` 명령을 Hermes central command registry에 추가했습니다.
+- CLI에서 `/work <요청>` 입력 시 `hermes-risk-based-work-router` 스킬 invocation으로 변환하도록 연결했습니다.
+- Telegram/Gateway 경로에서도 `/work <요청>`이 router skill message로 변환되어 일반 agent 처리로 이어지도록 연결했습니다.
+- skill payload 로드 실패 문자열(`[Failed to load skill: ...]`)은 실제 실패로 처리해 agent에 잘못 전달하지 않도록 보강했습니다.
+- CLI/Gateway/명령 registry 테스트를 추가했습니다.
+
+### 핵심 결정
+- `/work`는 새 별도 엔진 구현이 아니라 기존 `hermes-risk-based-work-router` 스킬을 canonical entrypoint로 호출합니다.
+- `/work`는 skill slash command 일반 경로를 우회하고 router skill을 직접 지정합니다.
+- Gateway에서는 `/work`를 처리한 뒤 원래 slash command가 skill/unknown-command 검사에 다시 걸리지 않도록 `command = None`, `canonical = None`으로 정리합니다.
+- Gateway 재시작, G3 서비스 재시작, 시스템 재부팅, 배포는 하지 않았습니다.
+
+### 검증
+- RED 확인: 신규 `/work` registry/CLI/Gateway 테스트가 구현 전 실패함을 확인했습니다.
+- Focused tests: `214 passed in 24.07s`
+- 문법 검사: `py_compile` 통과
+- 정적 보안 grep: findings 없음
+- 독립 코드리뷰 1차: pass, 비차단 제안 2개
+- 독립 코드리뷰 2차: pass, security/logic issue 없음
+- 전체 `tests/` 시도: 600초 타임아웃 및 기존 unrelated failure 확인. 첫 실패는 `tests/acp/test_approval_isolation.py::TestAcpExecAskGate::test_interactive_env_var_routes_to_callback`이며 이번 변경 파일과 무관합니다.
+
+---
+
 ## 2026-04-29 세션 2: `hermes-risk-based-work-router` 스킬 v2 업데이트
 
 ### 작업 내용
