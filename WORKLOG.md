@@ -1,5 +1,26 @@
 # hermes-agent WORKLOG
 
+## 2026-04-30 세션 1: `/work` 운영 반영 Gateway 재시작
+
+### 작업 내용
+- 사용자 승인 후 A8 `hermes-gateway` 서비스만 재시작했습니다.
+- 재시작 중 기존 drain 정책으로 약 10분 대기 후 새 프로세스가 기동되었습니다.
+- G3 AlphaMate 서비스 재시작, G3 시스템 재부팅, A8 시스템 재부팅, 별도 배포는 수행하지 않았습니다.
+
+### 핵심 결정
+- 이번 `/work` 변경은 A8 Hermes Agent/Gateway 코드 변경이므로 G3 조치는 필요하지 않습니다.
+- 운영 반영 범위는 A8 `hermes-gateway` 서비스 재시작으로 충분합니다.
+- Telegram fallback 경고는 일시적인 Telegram API/DNS/네트워크 경로 경고이며, 서비스 활성 상태와는 별개입니다.
+
+### 검증
+- `hermes-gateway` 상태: `active (running)`
+- 새 MainPID: `3340449`
+- 시작 시각: `2026-04-30 00:49:02 KST`
+- Git 상태: `dev` clean
+- 최신 커밋: `5ee472098 feat: add work router command`
+
+---
+
 ## 2026-04-29 세션 3: `/work` slash command 코드 연결
 
 ### 작업 내용
