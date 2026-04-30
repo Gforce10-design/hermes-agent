@@ -406,3 +406,18 @@
 ### 다음 작업
 - 사용자가 Telegram에 새 테스트 메시지를 보내면 `inbound message -> response ready -> [Telegram] Sending response` 로그와 실제 수신을 확인한다.
 - 확인 후 필요하면 `/tmp/wire_arbiter.py` 잔여 프로세스 정리 승인을 받아 종료한다.
+
+
+## 2026-05-01 03:48 KST - Telegram inbound live confirmation
+
+### 작업 내용
+- 운영 재시작 후 사용자가 Telegram에 `테스트` 메시지를 보냈고, A8 gateway 로그에서 새 코드의 실제 발송 경로를 확인했다.
+
+### 검증/테스트 결과
+- `2026-05-01 03:46:30` inbound: `msg='테스트'`.
+- `2026-05-01 03:48:28` response ready: 236 chars.
+- `2026-05-01 03:48:28` `[Telegram] Sending response (236 chars) to 1706240301` 확인.
+- 이로써 status-card edit에 최종 응답이 묻혀 normal final send가 스킵되던 문제는 운영 경로에서 복구 확인 완료.
+
+### 다음 작업
+- 잔여 운영 이슈: `/tmp/wire_arbiter.py` CPU 98% 장기 실행 프로세스 정리 여부를 별도 승인 후 결정.
