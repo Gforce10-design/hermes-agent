@@ -76,6 +76,36 @@ def test_global_deny_patterns_block_matching_content(tmp_path, monkeypatch):
     assert decision.matched_rule == "destructive-shell"
 
 
+def test_policy_action_does_not_prevent_global_deny_pattern(tmp_path, monkeypatch):
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+    routing = tmp_path / "bot-routing.yml"
+    routing.write_text(
+        "global_deny:\n"
+        "  - name: destructive-shell\n"
+        "    topic: \"*\"\n"
+        "    patterns:\n"
+        "      - git reset --hard\n"
+        "    action: deny_and_alert\n"
+        "    reason: destructive command\n"
+        "allow:\n"
+        "  - name: allow-alpha-ops\n"
+        "    topic: ops\n"
+        "    bot: alpha\n"
+        "    action: send\n",
+        encoding="utf-8",
+    )
+
+    decision = arbitrate_send(
+        metadata={"arbiter_topic": "ops", "arbiter_bot_name": "alpha"},
+        target="telegram:1",
+        content="please run git reset --hard now",
+        cache=RoutingCache(routing),
+    )
+
+    assert not decision.allowed
+    assert decision.matched_rule == "destructive-shell"
+
+
 def test_governed_send_without_allow_rules_fails_closed(tmp_path, monkeypatch):
     monkeypatch.setenv("HERMES_HOME", str(tmp_path))
     routing = tmp_path / "bot-routing.yml"

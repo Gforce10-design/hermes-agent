@@ -26,6 +26,15 @@ ACTION_KEY = "arbiter_action_type"
 TRACE_KEY = "arbiter_trace_id"
 IDEMPOTENCY_KEY = "arbiter_idempotency_key"
 
+POLICY_ACTIONS = {
+    "allow",
+    "deny",
+    "deny_and_alert",
+    "require_human_confirmation",
+    "review",
+    "blocked",
+}
+
 
 @dataclass(frozen=True)
 class Decision:
@@ -271,6 +280,12 @@ def _matches_rule(rule: Mapping[str, Any], context: Mapping[str, str]) -> bool:
         expected = rule.get(key)
         if expected is None:
             continue
+        if key == "action":
+            normalized_expected = _text(expected)
+            if normalized_expected in POLICY_ACTIONS:
+                # Runtime bot-routing.yml historically uses `action` to describe
+                # policy outcomes such as deny_and_alert, not outbound send type.
+                continue
         allowed = expected if isinstance(expected, list) else [expected]
         normalized = {_text(item) for item in allowed}
         if context.get(key) not in normalized and "*" not in normalized:
