@@ -3164,6 +3164,28 @@ class GatewayRunner:
 
         return "pair"
     
+    @staticmethod
+    def _is_gateway_health_probe(event: MessageEvent) -> bool:
+        """Return True for short smoke-test messages that should not run tools."""
+        text = (getattr(event, "text", None) or "").strip().lower()
+        if not text:
+            return False
+        # Accept only standalone probe words.  Longer phrases such as
+        # "OpenClaw 테스트 실행" must still go through the normal agent path.
+        text = re.sub(r"[\s.!?。！？~…]+$", "", text)
+        return text in {"테스트", "test", "ping", "핑", "헬스체크", "healthcheck"}
+
+    @staticmethod
+    def _format_gateway_health_probe_response(source: SessionSource) -> str:
+        platform = getattr(getattr(source, "platform", None), "value", "gateway")
+        return (
+            "Hermes gateway OK\n"
+            f"- {platform} inbound: received\n"
+            "- final reply path: active\n"
+            "- code tests were not run\n"
+            "상세 런타임 상태는 `/status`를 사용하세요."
+        )
+
     async def _handle_message(self, event: MessageEvent) -> Optional[str]:
         """
         Handle an incoming message from any platform.
@@ -3267,6 +3289,9 @@ class GatewayRunner:
                     # Record rate limit so subsequent messages are silently ignored
                     self.pairing_store._record_rate_limit(platform_name, source.user_id)
             return None
+
+        if not is_internal and self._is_gateway_health_probe(event):
+            return self._format_gateway_health_probe_response(source)
         
         # Intercept messages that are responses to a pending /update prompt.
         # The update process (detached) wrote .update_prompt.json; the watcher

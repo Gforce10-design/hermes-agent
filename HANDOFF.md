@@ -1,40 +1,51 @@
-# HANDOFF - Hermes Telegram Final Reply Delivery
+# HANDOFF - Hermes Telegram Health Probe and OpenClaw Bridge Status
 
 ## 현재 상태
 - A8 Hermes repo: `/home/sudol/.hermes/hermes-agent`, branch `dev`.
-- 최신 코드 커밋: `646884661 fix:restore-telegram-final-reply-delivery` pushed to `fork/dev`.
-- Telegram gateway 수신/LLM 응답 생성/최종 reply send 운영 경로가 복구 확인됐다.
-- `hermes-gateway`는 승인 후 재시작 완료: PID `4121922`, `active/running`, `NRestarts=0`, `ExecMainStatus=0`.
-- OpenClaw bridge smoke는 재시작 후에도 5 PASS.
+- `hermes-gateway` 운영 서비스는 재시작 반영 완료: PID `4124976`, `active/running`, `NRestarts=0`, `ExecMainStatus=0`.
+- Telegram 최종 reply send 경로는 이전 커밋에서 복구 확인됐다.
+- 이번 추가 수정으로 bare `테스트`/`test`/`ping`류 단독 문구는 코드 검증으로 라우팅하지 않고 gateway health OK 응답을 즉시 반환한다.
+- A8 stale `python /tmp/wire_arbiter.py` CPU 98% 프로세스는 종료했다.
 
 ## 이번 세션에서 한 일
 - `gateway/run.py`
-  - queued follow-up에서 Telegram status-card preview가 `already_sent`처럼 동작하지 않도록 `_previewed=False` 처리.
-  - 일반 return path에서 Telegram status card에 최종 답변을 embed하지 않고 `상태: 완료 / 응답은 별도 메시지로 전송합니다.`만 표시.
-  - stream consumer가 실제 final delivery를 확인한 경우에만 normal final send suppression 유지.
-- `tests/gateway/test_run_progress_topics.py`
-  - status card가 final answer를 품지 않는 새 UX 기준으로 테스트 갱신.
-  - previewed final / commentary / queued follow-up 모두 별도 final send가 가능하도록 기대값 수정.
-- 운영 반영
-  - `hermes-gateway` 재시작 완료.
-  - 사용자의 `테스트` Telegram 메시지로 운영 inbound live confirmation 완료.
+  - `_is_gateway_health_probe()` 추가: standalone smoke-test 단어만 감지.
+  - `_format_gateway_health_probe_response()` 추가: inbound/final reply path active/code tests not run 안내.
+  - auth check 이후, `/update` prompt 처리 전에 외부 standalone probe를 intercept.
+  - `OpenClaw 테스트 실행` 같은 명시적 긴 요청은 agent path로 유지.
+- `tests/gateway/test_unknown_command.py`
+  - bare `테스트`가 agent로 새지 않고 OK health response를 반환하는 회귀 테스트 추가.
+  - 명시적 OpenClaw test 요청은 agent path로 가는 회귀 테스트 추가.
+- 운영 정리
+  - stale `/tmp/wire_arbiter.py` 종료.
+  - `hermes-gateway` 재시작 및 상태 확인.
+  - OpenClaw bridge smoke와 targeted OpenClaw tests로 브릿지 범위를 재확인.
 
 ## 검증 결과
-- compileall 통과.
-- `test_run_progress_topics.py`: 28 passed.
-- `test_duplicate_reply_suppression.py`, `test_telegram_network.py`, `test_send_retry.py`, `test_telegram_reply_mode.py`: 129 passed.
-- `scripts/openclaw_bridge_smoke.py`: 5 PASS.
-- `git diff --check`: 통과.
-- 운영 로그 확인:
-  - `2026-05-01 03:46:30` inbound: `msg='테스트'`.
-  - `2026-05-01 03:48:28` response ready: 236 chars.
-  - `2026-05-01 03:48:28` `[Telegram] Sending response (236 chars) to 1706240301`.
+- Hermes:
+  - `compileall gateway/run.py tests/gateway/test_unknown_command.py` 통과.
+  - `tests/gateway/test_unknown_command.py`: 13 passed.
+  - `tests/gateway/test_unknown_command.py tests/gateway/test_run_progress_topics.py`: 41 passed.
+  - `scripts/openclaw_bridge_smoke.py`: 5 PASS.
+  - `git diff --check`: 통과.
+- 운영:
+  - `hermes-gateway`: active/running, PID `4124976`, `NRestarts=0`, `ExecMainStatus=0`.
+  - stale `wire_arbiter.py` 종료 확인.
+- OpenClaw bridge targeted checks:
+  - outbound metadata: 3 passed.
+  - outbound message/deliver: 50 passed.
+  - gateway send: 36 passed.
+- OpenClaw 전체 `check:changed`는 실패. 브릿지 문제가 아니라 기존 type/dependency 문제:
+  - `supportsLongCacheRetention` compat 타입 필드 누락.
+  - `@mariozechner/pi-ai` export 불일치.
+  - `@vincentkoc/qrcode-tui` 모듈/타입 누락.
 
 ## 알려진 이슈
-- 재시작 전에 처리된 Telegram 질문 2건은 답변이 transcript에는 남았지만 자동 재발송되지는 않는다.
-- A8에 `python /tmp/wire_arbiter.py` 장기 CPU 98% 프로세스가 남아 있다. 이번 수정 범위는 아니며 운영 프로세스 종료 승인이 필요하다.
+- OpenClaw `/home/sudol/openclaw`는 branch `fix/codex-cli-bootstrap-only`, HEAD `6269b6fc59`이며 macOS UI/설정 화면 17개 파일의 미커밋 변경이 남아 있다.
+- A8에 CPU 0%의 오래된 `systemctl --user start hermes-gateway; exec sleep infinity` shell 래퍼 2개가 남아 있다. 운영상 치명적이지 않아 이번 정리에서는 보존했다.
+- 실제 Telegram `테스트` 수신 confirmation은 사용자가 새 메시지를 보내면 로그와 수신 화면으로 확인한다.
 
 ## 다음에 할 일
-1. 사용자가 실제 Telegram 수신을 못 봤다고 하면 Telegram client/thread 표시 상태와 bot message id를 추가 확인한다.
-2. 별도 승인 후 `/tmp/wire_arbiter.py` 잔여 프로세스 정리 여부를 결정한다.
-3. Hermes/OpenClaw bridge 후속은 Control Tower 계획의 Bridge/Agent status 모델과 연결한다.
+1. 사용자가 Telegram에 `테스트`를 보내면 `Hermes gateway OK` 응답 수신을 확인한다.
+2. OpenClaw 전체 typecheck 실패를 별도 수정한다.
+3. OpenClaw 미커밋 UI 변경의 소유/의도 확인 후 별도 저장 또는 정리한다.

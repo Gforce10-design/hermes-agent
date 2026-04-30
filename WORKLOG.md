@@ -421,3 +421,46 @@
 
 ### 다음 작업
 - 잔여 운영 이슈: `/tmp/wire_arbiter.py` CPU 98% 장기 실행 프로세스 정리 여부를 별도 승인 후 결정.
+
+
+---
+
+## 2026-05-01 04:05 KST - Telegram health probe and A8 process cleanup
+
+### 작업 내용
+- 사용자가 Telegram에 보낸 짧은 `테스트` 메시지가 OpenClaw 코드 검증 요청으로 오해되어 `검증 실패` 답변을 낸 원인을 분리했다.
+- `gateway/run.py`에 standalone health probe guard를 추가해 `테스트`, `test`, `ping`, `핑`, `헬스체크`, `healthcheck` 같은 단독 문구는 agent/tools로 넘기지 않고 gateway OK 응답을 즉시 반환하게 했다.
+- `OpenClaw 테스트 실행`처럼 명시적인 repo/test 요청은 기존 agent path로 유지했다.
+- A8의 6일 이상 CPU 98%를 점유하던 stale `python /tmp/wire_arbiter.py` 프로세스를 종료했다.
+- 승인된 운영 정리 범위로 `hermes-gateway`를 재시작해 health probe guard를 런타임에 반영했다.
+- OpenClaw 상태를 분리 확인했다. Hermes/OpenClaw bridge 관련 targeted tests는 통과하지만, OpenClaw 전체 `check:changed`는 기존 type/dependency 이슈로 실패한다.
+
+### 왜 그렇게 바꿨는지
+- Telegram 전송 경로는 이미 복구됐지만, bare `테스트`가 직전 OpenClaw 문맥을 타고 코드 검증으로 해석되어 사용자에게 혼란스러운 실패 답변을 보냈다.
+- 운영 헬스체크 문구는 code/test runner로 라우팅하지 않는 게 더 안전하며, 명시적인 긴 요청만 agent로 넘기도록 경계를 좁혔다.
+- stale `wire_arbiter.py`는 Hermes/OpenClaw 현재 브릿지 smoke와 무관하고 CPU를 지속 점유해 운영 노이즈와 성능 리스크를 만들고 있었다.
+
+### 검증/테스트 결과
+- `venv/bin/python -m compileall gateway/run.py tests/gateway/test_unknown_command.py` 통과.
+- `venv/bin/pytest tests/gateway/test_unknown_command.py -q` -> 13 passed.
+- `venv/bin/pytest tests/gateway/test_unknown_command.py tests/gateway/test_run_progress_topics.py -q` -> 41 passed.
+- `venv/bin/python scripts/openclaw_bridge_smoke.py` -> 5 PASS.
+- 운영 `hermes-gateway` 재시작 후 `ActiveState=active`, `SubState=running`, PID `4124976`, `NRestarts=0`, `ExecMainStatus=0`.
+- stale `wire_arbiter.py` 종료 확인. 남은 `systemctl start hermes-gateway; sleep infinity` 래퍼 2개는 CPU 0%의 오래된 shell 세션이며 이번 정리 범위에서는 보존했다.
+- OpenClaw bridge targeted tests:
+  - `src/infra/outbound/hermes-arbiter-metadata.test.ts` -> 3 passed.
+  - `src/infra/outbound/message.test.ts`, `src/infra/outbound/deliver.test.ts` -> 50 passed.
+  - `src/gateway/server-methods/send.test.ts` -> 36 passed.
+- OpenClaw 전체 `check:changed`는 `typecheck all`에서 실패. 주요 원인은 `supportsLongCacheRetention` 필드 타입 누락, `@mariozechner/pi-ai` export 불일치, `@vincentkoc/qrcode-tui` 모듈/타입 누락으로 브릿지 patch와 별도다.
+- `git diff --check` 통과.
+
+### 리뷰 이력 또는 리스크
+- xrev 기준 수동 리뷰: standalone probe만 gateway에서 intercept하고, 명시적 repo test 요청은 agent path로 남겨 과차단을 피했다.
+- secrets/config/runtime DB/log 파일은 변경하거나 stage하지 않았다.
+- health probe 응답은 Telegram 외부 발송 테스트가 아니라 gateway handler/unit/smoke 기준으로 검증했다. 실제 Telegram에서 `테스트`를 보내면 OK 문구가 와야 한다.
+- OpenClaw repo에는 macOS UI/설정 화면 17개 파일의 미커밋 변경이 남아 있다. 이번 Hermes 정리 커밋 범위 밖이다.
+
+### 다음 작업
+1. 사용자가 Telegram에 `테스트`를 보내 OK health response를 실제 수신하는지 확인한다.
+2. OpenClaw 전체 typecheck 실패 원인을 별도 작업으로 정리한다.
+3. 오래된 `systemctl start hermes-gateway; sleep infinity` shell 래퍼 2개를 종료할지 별도 판단한다.

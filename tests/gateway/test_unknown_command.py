@@ -371,3 +371,31 @@ async def test_command_hook_rewrite_routes_to_plugin(monkeypatch):
     # First emit_collect fires on the original command; after rewrite the
     # dispatcher does NOT re-fire for the new command (one decision per turn).
     assert call_log == ["command:status"]
+
+
+@pytest.mark.asyncio
+async def test_standalone_korean_test_is_gateway_health_probe(monkeypatch):
+    """A bare '테스트' in Telegram is a bot smoke probe, not a repo test command."""
+    runner = _make_runner()
+    runner._run_agent = AsyncMock(
+        side_effect=AssertionError("standalone health probe leaked to the agent")
+    )
+
+    result = await runner._handle_message(_make_event("테스트"))
+
+    assert result is not None
+    assert "Hermes gateway OK" in result
+    assert "code tests were not run" in result
+    runner._run_agent.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_explicit_repo_test_still_uses_agent(monkeypatch):
+    """Only the standalone probe is intercepted; explicit repo tests remain agent work."""
+    runner = _make_runner()
+    runner._handle_message_with_agent = AsyncMock(return_value="agent path")
+
+    result = await runner._handle_message(_make_event("OpenClaw 테스트 실행"))
+
+    assert result == "agent path"
+    runner._handle_message_with_agent.assert_awaited_once()
