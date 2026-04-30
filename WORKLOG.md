@@ -168,3 +168,34 @@
 1. Hermes/OpenClaw 변경 커밋 후 원격 push 상태를 확인합니다.
 2. 운영 반영이 필요하면 `hermes-gateway` 재시작 승인 요청과 rollback 절차를 먼저 제시합니다.
 3. 실제 routing policy(`/home/sudol/.hermes/config/bot-routing.yml`) 운영 규칙은 별도 승인 후 작성합니다.
+
+---
+
+## 2026-05-01 세션 2: OpenClaw bridge 재시작 runbook 및 no-send smoke 고정
+
+### 작업 내용
+- Hermes 운영 repo(`/home/sudol/.hermes/hermes-agent`)에 `docs/openclaw-bridge-restart-runbook.md`를 추가했습니다.
+- `scripts/openclaw_bridge_smoke.py`를 추가해 외부 발송 없이 plugin discovery, migration dry-run, arbiter fail-closed/allow/idempotency를 점검하도록 했습니다.
+- smoke 스크립트는 전역 `hermes` 바이너리가 아니라 실행 중인 repo의 Python module(`sys.executable -m hermes_cli.main`)을 사용하도록 고정했습니다.
+- 운영 `hermes-gateway` 재시작, routing config 작성, OpenClaw runtime state 수정은 수행하지 않았습니다.
+
+### 핵심 결정
+- 운영 반영 전 절차는 문서(runbook)와 실행 가능한 no-send smoke로 먼저 고정합니다.
+- `systemctl --user restart hermes-gateway`, runtime config/token 변경, `/home/sudol/.openclaw` write는 계속 승인 게이트로 둡니다.
+- smoke의 arbiter 검증은 임시 `HERMES_HOME`을 사용해 운영 idempotency DB를 건드리지 않습니다.
+
+### 검증
+- `venv/bin/python -m compileall scripts/openclaw_bridge_smoke.py` → 통과
+- `venv/bin/python scripts/openclaw_bridge_smoke.py --skip-cli` → 3 checks PASS
+- `venv/bin/python scripts/openclaw_bridge_smoke.py` → 5 checks PASS
+- A8 `hermes-gateway.service` 상태 확인: active running, 재시작은 하지 않음
+
+### 리뷰/리스크
+- xrev 관점 수동 리뷰: 새 파일 2개만 변경, secrets/config/runtime DB/log 미포함, 외부 send 없음, restart는 명시 승인 gate로 유지됨.
+- rollback 절차에는 `git checkout 35d4a485c`가 포함되지만 runbook에서 destructive/approval-required로 명시했습니다.
+- 실제 routing policy 파일 작성은 아직 별도 승인 전이라 수행하지 않았습니다.
+
+### 다음 작업
+1. 사용자가 명시 승인하면 runbook대로 `hermes-gateway`를 재시작하고 post-restart smoke/log를 확인합니다.
+2. 재시작이 안정화되면 별도 승인으로 `/home/sudol/.hermes/config/bot-routing.yml` 운영 allow/deny 정책을 작성합니다.
+3. OpenClaw metadata branch는 PR 생성 또는 원래 branch 통합 방식을 별도 결정합니다.
