@@ -5,7 +5,7 @@
 > 상태: Hermes ↔ OpenClaw opt-in bridge 운영 경로 복구 완료, Telegram actual delivery smoke 통과
 
 ## 현재 상태
-- A8 Hermes repo: `/home/sudol/.hermes/hermes-agent` (`dev`, 최근 bridge 문서 커밋 `ac0364759`)
+- A8 Hermes repo: `/home/sudol/.hermes/hermes-agent` (`dev`, 최신 커밋은 `git log -1`로 확인)
 - A8 OpenClaw repo: `/home/sudol/openclaw` (`fix/codex-cli-bootstrap-only`, local HEAD `6269b6fc59`)
 - OpenClaw runtime state: `/home/sudol/.openclaw`는 읽기 전용으로만 확인했습니다.
 - Hermes gateway는 active/running입니다.
@@ -29,6 +29,7 @@
   - `c8d0ba2d4 fix: honor bot routing deny patterns`
   - `ee8341823 fix: treat routing policy actions as deny metadata`
   - `ac0364759 docs: record openclaw bridge operational finish`
+  - `50a99cb50 docs:record-telegram-delivery-recovery`
 - OpenClaw commits:
   - `20f0ee5c96 feat(outbound): add hermes arbiter metadata opt-in`
   - `6269b6fc59 fix(outbound): preserve hermes arbiter metadata through gateway send`
