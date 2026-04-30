@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 MAX_PLATFORM_OUTPUT = 4000
 TRUNCATED_VISIBLE = 3800
 
+from .arbiter import arbitrate_send
 from .config import Platform, GatewayConfig
 from .session import SessionSource
 
@@ -249,6 +250,18 @@ class DeliveryRouter:
         send_metadata = dict(metadata or {})
         if target.thread_id and "thread_id" not in send_metadata:
             send_metadata["thread_id"] = target.thread_id
+
+        decision = arbitrate_send(
+            metadata=send_metadata,
+            target=target.to_string(),
+            content=content,
+        )
+        if decision.governed:
+            send_metadata.update(decision.to_metadata())
+        if not decision.allowed:
+            logger.warning("Delivery denied by arbiter: %s", decision.reason)
+            return {"skipped": True, "reason": decision.reason, "arbiter": decision.to_metadata()}
+
         return await adapter.send(target.chat_id, content, metadata=send_metadata or None)
 
 

@@ -1,8 +1,19 @@
 """Tests for the delivery routing module."""
 
+import pytest
+
 from gateway.config import Platform
-from gateway.delivery import DeliveryTarget
+from gateway.delivery import DeliveryRouter, DeliveryTarget
 from gateway.session import SessionSource
+
+
+class FakeAdapter:
+    def __init__(self):
+        self.calls = []
+
+    async def send(self, chat_id, content, metadata=None):
+        self.calls.append({"chat_id": chat_id, "content": content, "metadata": metadata})
+        return {"messageId": "m1"}
 
 
 class TestParseTargetPlatformChat:
@@ -64,5 +75,60 @@ class TestTargetToStringRoundtrip:
         assert reparsed.platform == Platform.TELEGRAM
         assert reparsed.chat_id == "999"
 
+
+class TestDeliveryArbiterHook:
+    @pytest.mark.asyncio
+    async def test_without_arbiter_metadata_bypasses_hook(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+        adapter = FakeAdapter()
+        router = DeliveryRouter(config=object(), adapters={Platform.TELEGRAM: adapter})
+
+        result = await router._deliver_to_platform(
+            DeliveryTarget.parse("telegram:123"),
+            "hello",
+            {"job_id": "job-1"},
+        )
+
+        assert result == {"messageId": "m1"}
+        assert adapter.calls[0]["metadata"]["job_id"] == "job-1"
+
+    @pytest.mark.asyncio
+    async def test_governed_metadata_without_routing_file_is_denied(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+        adapter = FakeAdapter()
+        router = DeliveryRouter(config=object(), adapters={Platform.TELEGRAM: adapter})
+
+        result = await router._deliver_to_platform(
+            DeliveryTarget.parse("telegram:123"),
+            "hello",
+            {"arbiter_topic": "ops", "arbiter_bot_name": "alpha"},
+        )
+
+        assert result["skipped"] is True
+        assert "not found" in result["reason"]
+        assert adapter.calls == []
+
+    @pytest.mark.asyncio
+    async def test_governed_metadata_allow_reaches_adapter(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+        routing_dir = tmp_path / "config"
+        routing_dir.mkdir()
+        (routing_dir / "bot-routing.yml").write_text(
+            "allow:\n"
+            "  - topic: ops\n"
+            "    bot: alpha\n",
+            encoding="utf-8",
+        )
+        adapter = FakeAdapter()
+        router = DeliveryRouter(config=object(), adapters={Platform.TELEGRAM: adapter})
+
+        result = await router._deliver_to_platform(
+            DeliveryTarget.parse("telegram:123"),
+            "hello",
+            {"arbiter_topic": "ops", "arbiter_bot_name": "alpha"},
+        )
+
+        assert result == {"messageId": "m1"}
+        assert adapter.calls[0]["metadata"]["arbiter_allowed"] is True
 
 

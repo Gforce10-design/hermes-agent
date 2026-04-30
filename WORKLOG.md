@@ -125,3 +125,46 @@
 - A8/Desktop/G3 `main` HEAD → `20223475`, git status clean, OpenClaw tracked file 없음
 
 ---
+
+---
+
+## 2026-05-01 세션 1: Hermes ↔ OpenClaw 운영 브릿지 복구 v2
+
+### 작업 내용
+- A8 Hermes 운영 repo(`/home/sudol/.hermes/hermes-agent`) 기준으로 OpenClaw bridge inventory를 고정했습니다.
+- 비어 있던 `plugins/openclaw-bridge/`를 실제 load 가능한 marker plugin으로 복구해 `plugins.enabled`와 plugin discovery 불일치를 해소했습니다.
+- `hermes claw migrate --dry-run`용 `openclaw-migration` skill/script를 복구했습니다.
+- dry-run 중 Hermes gateway가 실행 중이면 경고만 보여주고 preview를 진행하도록 `hermes_cli/claw.py`를 조정했습니다. 실제 migration 실행은 기존처럼 승인/정지 판단이 필요합니다.
+- `gateway/arbiter.py`를 추가해 opt-in metadata 기반 delivery-time allow/deny/idempotency 판단을 구현했습니다.
+- `gateway/delivery.py`에 metadata opt-in hook을 연결했습니다. `arbiter_topic`과 `arbiter_bot_name`이 없으면 기존 delivery 동작을 유지합니다.
+- OpenClaw repo(`/home/sudol/openclaw`)에 `HermesArbiterMetadata` 빌더와 gateway send payload forwarding을 추가했습니다.
+- 5일 이상 남아 있던 `/tmp/wire_arbiter.py` 테스트 잔여 프로세스와 이번 dry-run 잔여 프로세스를 정리했습니다. Hermes gateway 서비스는 재시작하지 않았습니다.
+
+### 핵심 결정
+- 초기 브릿지는 opt-in metadata 방식만 허용합니다.
+- Hermes arbiter는 fail-closed입니다. metadata가 있는 발송은 routing 파일이 없거나 allow 규칙이 없으면 차단합니다.
+- OpenClaw runtime state(`/home/sudol/.openclaw`)는 읽기 전용으로만 다뤘습니다.
+- 운영 `hermes-gateway` 재시작은 별도 승인 전까지 수행하지 않았습니다.
+
+### 검증
+- Hermes: `python -m compileall hermes_cli/claw.py gateway/arbiter.py gateway/delivery.py optional-skills/migration/openclaw-migration/scripts/openclaw_to_hermes.py plugins/openclaw-bridge/__init__.py` → 통과
+- Hermes: `pytest tests/gateway/test_arbiter.py tests/gateway/test_delivery.py -q` → 18 passed
+- Hermes: `hermes plugins list` → `openclaw-bridge enabled 0.1.0` 확인
+- Hermes: `hermes claw migrate --dry-run` → 14개 preview, 파일 수정 없음
+- OpenClaw: `pnpm docs:list` → 실행 완료
+- OpenClaw: `pnpm exec oxfmt --check --threads=1 ...` → 통과
+- OpenClaw: `pnpm exec oxlint ...` → 0 warnings / 0 errors
+- OpenClaw: `pnpm test src/infra/outbound/message.test.ts src/infra/outbound/hermes-arbiter-metadata.test.ts` → 11 tests passed
+- 통합 dry-run: OpenClaw metadata builder → Hermes arbiter decision(`allowed`, trace/idempotency 포함) 확인, 실제 외부 send 미실행
+- 프로세스 점검: OpenClaw/Telegram 별도 충돌 프로세스 없음. Hermes gateway/dashboard/cloudflared만 운영 중.
+
+### 리뷰/리스크
+- xrev 관점에서 allow 규칙 없는 routing 파일을 허용하던 초기 구현을 fail-closed로 수정했습니다.
+- OpenClaw 전체 `tsc --noEmit`은 Node heap OOM으로 완료되지 않았습니다.
+- OpenClaw `tsgo:core`, `tsgo:test:src`는 기존 model compat/qr-runtime 타입 오류로 실패했습니다. 이번 변경 파일과 무관한 기존 오류입니다.
+- OpenClaw repo에는 기존 macOS UI 관련 dirty files가 남아 있으며, 이번 작업에서는 건드리지 않았습니다.
+
+### 다음 작업
+1. Hermes/OpenClaw 변경 커밋 후 원격 push 상태를 확인합니다.
+2. 운영 반영이 필요하면 `hermes-gateway` 재시작 승인 요청과 rollback 절차를 먼저 제시합니다.
+3. 실제 routing policy(`/home/sudol/.hermes/config/bot-routing.yml`) 운영 규칙은 별도 승인 후 작성합니다.

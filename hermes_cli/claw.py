@@ -114,7 +114,7 @@ def _detect_openclaw_processes() -> list[str]:
     return found
 
 
-def _warn_if_openclaw_running(auto_yes: bool) -> None:
+def _warn_if_openclaw_running(auto_yes: bool, *, preview_only: bool = False) -> None:
     """Warn if OpenClaw is still running before migration.
 
     Telegram, Discord, and Slack only allow one active connection per bot
@@ -138,6 +138,9 @@ def _warn_if_openclaw_running(auto_yes: bool) -> None:
     print()
     if auto_yes:
         return
+    if preview_only:
+        print_info("Dry-run only — continuing without changing OpenClaw or Hermes state.")
+        return
     if not sys.stdin.isatty():
         print_info("Non-interactive session — continuing to preview only.")
         return
@@ -146,7 +149,7 @@ def _warn_if_openclaw_running(auto_yes: bool) -> None:
         sys.exit(0)
 
 
-def _warn_if_gateway_running(auto_yes: bool) -> None:
+def _warn_if_gateway_running(auto_yes: bool, *, preview_only: bool = False) -> None:
     """Check if a Hermes gateway is running with connected platforms.
 
     Migrating bot tokens while the gateway is polling will cause conflicts
@@ -177,6 +180,9 @@ def _warn_if_gateway_running(auto_yes: bool) -> None:
     )
     print_info("Recommendation: stop the gateway first with 'hermes stop'.")
     print()
+    if preview_only:
+        print_info("Dry-run only — continuing without changing gateway state or tokens.")
+        return
     if not auto_yes and not prompt_yes_no("Continue anyway?", default=False):
         print_info("Migration cancelled. Stop the gateway and try again.")
         sys.exit(0)
@@ -383,10 +389,10 @@ def _cmd_migrate(args):
 
     # Check if OpenClaw is still running — migrating tokens while both are
     # active will cause conflicts (e.g. Telegram 409).
-    _warn_if_openclaw_running(auto_yes)
+    _warn_if_openclaw_running(auto_yes, preview_only=dry_run)
 
     # Check if a Hermes gateway is running with connected platforms.
-    _warn_if_gateway_running(auto_yes)
+    _warn_if_gateway_running(auto_yes, preview_only=dry_run)
 
     # Ensure config.yaml exists before migration tries to read it
     config_path = get_config_path()
