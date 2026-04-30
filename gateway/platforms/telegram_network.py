@@ -75,7 +75,15 @@ class TelegramFallbackTransport(httpx.AsyncBaseTransport):
             return await self._primary.handle_async_request(request)
 
         sticky_ip = self._sticky_ip
-        attempt_order: list[Optional[str]] = [sticky_ip] if sticky_ip else [None]
+        # A sticky fallback can go stale after Telegram/network routing changes.
+        # Try it first to preserve the fast path, but always keep the primary
+        # host in the same request's recovery path so outbound replies are not
+        # trapped on a dead fallback IP until the gateway is restarted.
+        attempt_order: list[Optional[str]] = []
+        if sticky_ip:
+            attempt_order.extend([sticky_ip, None])
+        else:
+            attempt_order.append(None)
         for ip in self._fallback_ips:
             if ip != sticky_ip:
                 attempt_order.append(ip)
@@ -97,16 +105,26 @@ class TelegramFallbackTransport(httpx.AsyncBaseTransport):
                 return response
             except Exception as exc:
                 last_error = exc
-                if not _is_retryable_connect_error(exc):
+                if not _is_retryable_telegram_path_error(exc, ip):
                     raise
+                if ip is not None and ip == sticky_ip:
+                    async with self._sticky_lock:
+                        if self._sticky_ip == ip:
+                            self._sticky_ip = None
+                    logger.warning(
+                        "[Telegram] Sticky fallback IP %s failed (%r); clearing sticky route",
+                        ip,
+                        exc,
+                    )
+                    continue
                 if ip is None:
                     logger.warning(
-                        "[Telegram] Primary api.telegram.org connection failed (%s); trying fallback IPs %s",
+                        "[Telegram] Primary api.telegram.org connection failed (%r); trying fallback IPs %s",
                         exc,
                         ", ".join(self._fallback_ips),
                     )
                     continue
-                logger.warning("[Telegram] Fallback IP %s failed: %s", ip, exc)
+                logger.warning("[Telegram] Fallback IP %s failed: %r", ip, exc)
                 continue
 
         if last_error is None:
@@ -242,5 +260,10 @@ def _rewrite_request_for_ip(request: httpx.Request, ip: str) -> httpx.Request:
     )
 
 
-def _is_retryable_connect_error(exc: Exception) -> bool:
-    return isinstance(exc, (httpx.ConnectTimeout, httpx.ConnectError))
+def _is_retryable_telegram_path_error(exc: Exception, attempted_ip: str | None) -> bool:
+    if isinstance(exc, (httpx.ConnectTimeout, httpx.ConnectError)):
+        return True
+    # Preserve primary-host semantics for read timeouts, but allow fallback IP
+    # paths to recover because a stale sticky fallback can otherwise black-hole
+    # outbound replies even while api.telegram.org itself is reachable.
+    return attempted_ip is not None and isinstance(exc, httpx.TimeoutException)

@@ -341,3 +341,42 @@
 2. 승인 후 `hermes gateway restart`로 service definition을 refresh하고 smoke를 재실행합니다.
 3. Slack app/bot token과 home channel이 준비되면 Hermes Slack config를 연결합니다.
 4. OpenClaw는 `feat/hermes-arbiter-gateway-metadata-20260501`로 PR/integration을 진행하고, `fix/codex-cli-bootstrap-only` remote에는 force push하지 않습니다.
+
+---
+
+## 2026-05-01 세션 6: Telegram sticky fallback outbound 복구
+
+### 작업 내용
+- 사용자가 `HermesA8_bot`에 보낸 `헬로` 메시지가 inbound 처리되고 LLM 응답까지 생성됐지만, 실제 Telegram outbound 답장이 전달되지 않는 문제를 진단했습니다.
+- gateway 로그에서 `response ready` 직후 `TelegramFallbackTransport`가 오래된 sticky fallback IP `149.154.167.220` 경로에 고착되는 것을 확인했습니다.
+- `gateway/platforms/telegram_network.py`를 수정해 sticky fallback 실패 시 sticky route를 clear하고, 같은 request recovery path에서 primary `api.telegram.org`를 다시 시도하도록 했습니다.
+- fallback IP에서 발생하는 timeout은 stale route 회복 대상으로 처리하고, primary host read-timeout의 기존 보수적 동작은 유지했습니다.
+- stale sticky fallback 회복 테스트를 `tests/gateway/test_telegram_network.py`에 추가했습니다.
+- 승인된 운영 재시작 플로우에 따라 `hermes-gateway.service`를 재시작하고, OpenClaw no-send smoke 및 실제 TelegramAdapter outbound smoke를 확인했습니다.
+
+### 왜 그렇게 바꿨는지
+- 단순 send 재시도는 Telegram 중복 발송 위험이 있어 기존 `TimedOut` non-retryable 정책을 유지해야 했습니다.
+- 문제의 핵심은 send retry가 아니라 transport가 stale fallback IP에서 primary host로 빠져나오지 못하는 경로였으므로, fallback transport 내부의 recovery order를 고치는 것이 맞았습니다.
+- primary read-timeout까지 무조건 fallback retry하면 중복 전송 리스크가 커질 수 있어, fallback IP path timeout만 회복 대상으로 좁혔습니다.
+
+### 검증/테스트 결과
+- `venv/bin/python -m compileall gateway/platforms/telegram_network.py` -> PASS
+- `venv/bin/pytest tests/gateway/test_telegram_network.py -q` -> 47 passed
+- `venv/bin/pytest tests/gateway/test_telegram_network_reconnect.py -q` -> 4 passed
+- `venv/bin/pytest tests/gateway/test_send_retry.py -q` -> 35 passed
+- `venv/bin/pytest tests/gateway/test_telegram_reply_mode.py -q` -> 25 passed
+- `venv/bin/python scripts/openclaw_bridge_smoke.py` -> 5 checks PASS
+- `systemctl --user show hermes-gateway --property=ActiveState,SubState,MainPID,NRestarts,ExecMainStatus` -> active/running, PID `4107295`
+- 실제 TelegramAdapter outbound smoke -> success, message id `1980`
+- `git diff --check` -> PASS
+
+### 리뷰 이력 또는 리스크
+- xrev 관점 수동 리뷰: diff는 Telegram fallback transport와 해당 단위 테스트 2개 파일로 제한됩니다.
+- secrets/config/runtime DB/log 파일은 변경하거나 stage하지 않습니다.
+- 사용자가 재시작 전 보낸 `헬로` 메시지는 이미 processed 상태라 자동 재전송되지 않습니다. 새 inbound 메시지로 end-to-end 확인이 필요합니다.
+- `hermes gateway status`의 service definition outdated warning은 기존 잔여 이슈이며 이번 transport hotfix와 별도입니다.
+
+### 다음 작업
+1. 사용자가 새 Telegram 메시지를 보내면 inbound -> response -> send 로그를 확인합니다.
+2. 이번 fix를 commit/push하고 임시 patch/smoke 파일을 정리합니다.
+3. Slack 알림 채널은 별도 config/secret 승인 후 연결합니다.

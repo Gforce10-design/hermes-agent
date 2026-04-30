@@ -252,9 +252,39 @@ class TestFallbackTransport:
 
         resp = await transport.handle_async_request(_telegram_request())
         assert resp.status_code == 200
-        # Tried sticky (.220) first, then fell through to .221
-        assert [c["url_host"] for c in calls] == ["149.154.167.220", "149.154.167.221"]
+        # Tried sticky (.220) first, then primary, then fell through to .221
+        assert [c["url_host"] for c in calls] == [
+            "149.154.167.220",
+            "api.telegram.org",
+            "149.154.167.221",
+        ]
         assert transport._sticky_ip == "149.154.167.221"
+
+    @pytest.mark.asyncio
+    async def test_sticky_timeout_clears_and_recovers_to_primary(self, monkeypatch):
+        """A stale sticky fallback must not black-hole outbound replies."""
+        calls = []
+        behavior = {
+            "api.telegram.org": "timeout",
+            "149.154.167.220": "ok",
+        }
+        monkeypatch.setattr(tnet.httpx, "AsyncHTTPTransport", _fake_transport_factory(calls, behavior))
+
+        transport = tnet.TelegramFallbackTransport(["149.154.167.220"])
+
+        # First request: primary fails -> fallback works -> becomes sticky
+        await transport.handle_async_request(_telegram_request())
+        assert transport._sticky_ip == "149.154.167.220"
+
+        # Later, sticky fallback starts timing out but primary is healthy again.
+        calls.clear()
+        behavior["api.telegram.org"] = "ok"
+        behavior["149.154.167.220"] = httpx.ReadTimeout("read timeout")
+
+        resp = await transport.handle_async_request(_telegram_request())
+        assert resp.status_code == 200
+        assert [c["url_host"] for c in calls] == ["149.154.167.220", "api.telegram.org"]
+        assert transport._sticky_ip is None
 
 
 class TestFallbackTransportPassthrough:
