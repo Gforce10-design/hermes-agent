@@ -300,3 +300,44 @@
 1. OpenClaw bridge PR/integration branch merge 방식을 결정합니다.
 2. Telegram inbound polling까지 사용자 실사용 메시지로 확인할 수 있으면 추가로 기록합니다.
 3. Slack 알림 채널 연결은 별도 token/config 승인 후 진행합니다.
+
+---
+
+## 2026-05-01 세션 5: Telegram inbound/Slack/OpenClaw 후속 진단
+
+### 작업 내용
+- Hermes gateway unit 상태를 재확인했습니다.
+- `journalctl --user -u hermes-gateway --since 2026-05-01T02:35:30`로 Telegram delivery smoke 이후 신규 gateway 로그를 확인했습니다.
+- Hermes `status`, `gateway status`, `config check`로 Telegram/Slack/서비스 상태를 점검했습니다.
+- Slack runtime dependency(`slack_bolt`, `slack_sdk`) 설치 여부를 확인했습니다.
+- OpenClaw branch/remotes/merge-tree 상태를 읽기 전용으로 확인했습니다.
+
+### 왜 그렇게 바꿨는지
+- Telegram 송신 성공만으로는 inbound polling, Slack 설정, OpenClaw 통합 전략이 닫히지 않습니다.
+- 운영 config/token 변경이나 service restart 없이 확인 가능한 부분을 먼저 분리해 위험을 줄였습니다.
+
+### 검증/테스트 결과
+- Hermes gateway: `ActiveState=active`, `SubState=running`, `MainPID=4044919`, `ExecMainStatus=0`, `NRestarts=0`
+- `journalctl --since 2026-05-01T02:35:30` → 신규 gateway entries 없음
+- `hermes status` → Telegram configured(home `1706240301`), Slack not configured
+- `hermes gateway status` → service running, linger enabled, but installed gateway service definition outdated
+- `hermes config check` → `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USERS` present; `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN` missing
+- Slack Python deps: `slack_bolt=True`, `slack_sdk=True`
+- OpenClaw:
+  - local HEAD `6269b6fc59`
+  - remote `feat/hermes-arbiter-gateway-metadata-20260501` = `6269b6fc59`
+  - remote `fix/codex-cli-bootstrap-only` = `1c36f6e...`, non-fast-forward 대상
+  - `git diff --check upstream/main...HEAD` → PASS
+  - `git merge-tree upstream/main HEAD` → tree hash 반환, conflict 없음
+
+### 리뷰 이력 또는 리스크
+- 운영 service restart는 수행하지 않았습니다. `hermes gateway restart`는 outdated unit refresh에 필요하지만 별도 승인 대상입니다.
+- Slack config/token 변경은 수행하지 않았습니다. 토큰 값과 home channel ID가 필요합니다.
+- Telegram inbound end-to-end는 사용자가 실제로 `HermesA8_bot`에 메시지를 보내야 완전히 닫힙니다.
+- OpenClaw 기존 macOS UI dirty files는 그대로 보존했습니다.
+
+### 다음 작업
+1. `HermesA8_bot`에 실제 테스트 메시지를 보내 inbound 처리 로그를 확인합니다.
+2. 승인 후 `hermes gateway restart`로 service definition을 refresh하고 smoke를 재실행합니다.
+3. Slack app/bot token과 home channel이 준비되면 Hermes Slack config를 연결합니다.
+4. OpenClaw는 `feat/hermes-arbiter-gateway-metadata-20260501`로 PR/integration을 진행하고, `fix/codex-cli-bootstrap-only` remote에는 force push하지 않습니다.

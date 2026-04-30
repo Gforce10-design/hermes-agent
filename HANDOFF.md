@@ -61,13 +61,17 @@
 
 ## 알려진 이슈
 - systemd `status`에는 과거 02:17~02:35 Telegram fallback warnings가 남아 보일 수 있습니다. 실제 Bot API와 Hermes send path는 현재 정상입니다.
-- Slack은 Hermes status 기준 아직 configured가 아닙니다.
+- Telegram inbound는 gateway polling 프로세스가 살아 있고 02:35:30 이후 신규 warning이 없지만, 사용자 실사용 메시지로 end-to-end 수신 확인은 아직 남아 있습니다.
+- Hermes gateway service definition이 outdated로 표시됩니다. `hermes gateway restart`가 unit refresh를 수행하지만, 운영 재시작이므로 별도 승인 후 진행해야 합니다.
+- Slack은 Hermes status/config 기준 아직 configured가 아닙니다. `slack_bolt`, `slack_sdk`는 설치되어 있으나 `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, `SLACK_HOME_CHANNEL`이 없습니다.
 - Gateway shutdown diagnostic은 오래된 Hermes helper/dashboard 프로세스를 표시합니다. 현재 gateway unit 자체는 active/running입니다.
 - OpenClaw `npm run tsgo:core`는 기존 model compat / qr-runtime type 오류로 실패합니다. 이번 bridge 변경과 무관한 기존 오류입니다.
 - OpenClaw repo에는 pre-existing macOS UI dirty files가 남아 있으며, 이번 bridge 작업에서는 건드리지 않았습니다.
+- OpenClaw HEAD `6269b6fc59`는 remote `feat/hermes-arbiter-gateway-metadata-20260501`와 일치합니다. Remote `fix/codex-cli-bootstrap-only`는 `1c36f6e...`라 non-fast-forward 상태이므로 force/rebase 없이 건드리지 않습니다.
 
 ## 다음에 할 일
-1. OpenClaw PR 또는 integration branch merge 전략을 결정합니다. Remote `fix/codex-cli-bootstrap-only`가 ahead라 rebase/merge는 별도 승인 후 진행합니다.
-2. shutdown diagnostic의 오래된 Hermes helper/dashboard 프로세스가 정상 상주인지, 중복 실행 잔재인지 분리 점검합니다.
-3. Slack 알림 채널은 별도 config/secret 승인 후 연결합니다.
-4. Control Tower 계획에는 Hermes/OpenClaw를 primary agent runtime으로 반영하고, Codex/Claude는 bridge tool/worker로 단계적으로 편입합니다.
+1. 사용자가 Telegram으로 `HermesA8_bot`에 테스트 메시지를 보내면 inbound end-to-end 로그를 확인합니다.
+2. 승인 후 `hermes gateway restart`로 outdated service definition을 refresh하고 post-restart smoke를 재실행합니다.
+3. Slack 알림 채널은 별도 config/secret 승인 후 `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, `SLACK_HOME_CHANNEL`을 설정합니다.
+4. OpenClaw는 `feat/hermes-arbiter-gateway-metadata-20260501`을 PR/integration branch로 사용합니다. `fix/codex-cli-bootstrap-only` remote에는 force push하지 않습니다.
+5. Control Tower 계획에는 Hermes/OpenClaw를 primary agent runtime으로 반영하고, Codex/Claude는 bridge tool/worker로 단계적으로 편입합니다.
