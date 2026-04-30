@@ -22,7 +22,7 @@
 3. Hermes `TelegramFallbackTransport`의 일반 경로와 sticky fallback 경로가 모두 `getMe` 200 OK를 반환함을 확인했습니다.
 4. Hermes `send_message_tool({"target":"telegram"})` 실제 송신을 두 번 실행해 Telegram home channel delivery를 확인했습니다.
 5. 오래 남아 있던 OpenClaw `git push origin fix/codex-cli-bootstrap-only` 잔여 프로세스 2개를 종료했습니다. 원격 branch가 non-fast-forward라 더 진행될 수 없는 이전 시도였습니다.
-6. 임시 진단 스크립트는 작업 후 삭제 대상으로 정리했습니다.
+6. 임시 진단 스크립트는 로컬/A8 staging 위치에서 삭제했습니다.
 
 ## 저장/푸시
 - Hermes commits pushed to `fork/dev`:
