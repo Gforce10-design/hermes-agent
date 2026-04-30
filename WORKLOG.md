@@ -199,3 +199,29 @@
 1. 사용자가 명시 승인하면 runbook대로 `hermes-gateway`를 재시작하고 post-restart smoke/log를 확인합니다.
 2. 재시작이 안정화되면 별도 승인으로 `/home/sudol/.hermes/config/bot-routing.yml` 운영 allow/deny 정책을 작성합니다.
 3. OpenClaw metadata branch는 PR 생성 또는 원래 branch 통합 방식을 별도 결정합니다.
+
+---
+
+## 2026-05-01 세션 3: Hermes gateway 운영 재시작 반영
+
+### 작업 내용
+- 사용자 승인 후 A8 `hermes-gateway.service`를 재시작했습니다.
+- 재시작 전 PID `3340449`, 재시작 후 PID `4010489`로 변경됨을 확인했습니다.
+- `journalctl --user -u hermes-gateway --since "2026-05-01 01:53:30" --no-pager`로 재시작 구간 로그를 확인했습니다.
+- `scripts/openclaw_bridge_smoke.py`를 재실행해 plugin, migration dry-run, arbiter no-send checks를 확인했습니다.
+
+### 검증
+- `systemctl --user restart hermes-gateway` → exit 0
+- `systemctl --user show hermes-gateway -p ActiveState -p SubState -p MainPID -p ExecMainStatus -p Result -p NRestarts` → `ActiveState=active`, `SubState=running`, `MainPID=4010489`, `ExecMainStatus=0`, `Result=success`, `NRestarts=0`
+- `venv/bin/python scripts/openclaw_bridge_smoke.py` → 5 checks PASS
+- journal 신규 구간에서 OpenClaw bridge/arbiter import error 또는 traceback 없음
+
+### 리뷰/리스크
+- journal에는 기존 Telegram 네트워크 timeout과 gateway 종료 시 `other hermes processes running` 진단이 보입니다. 이번 bridge 재시작 실패는 아니며, 신규 프로세스는 active/success 상태입니다.
+- shutdown 중 이전 프로세스가 `status=1/FAILURE`로 기록됐지만 최종 unit 상태는 `Result=success`, `ExecMainStatus=0`입니다.
+- runtime routing policy(`/home/sudol/.hermes/config/bot-routing.yml`)는 아직 작성하지 않았습니다.
+
+### 다음 작업
+1. Telegram/Slack 알림 채널 실제 송수신 점검을 별도 작업으로 진행합니다.
+2. OpenClaw bridge runtime allow/deny policy는 별도 승인 후 적용합니다.
+3. shutdown diagnostic에 남는 오래된 Hermes helper shell/process 정리 필요성을 별도 점검합니다.
