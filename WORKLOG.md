@@ -264,3 +264,39 @@
 1. Telegram/Slack 알림 채널 실제 송수신 점검을 별도 작업으로 진행합니다.
 2. OpenClaw bridge runtime allow/deny policy는 별도 승인 후 적용합니다.
 3. shutdown diagnostic에 남는 오래된 Hermes helper shell/process 정리 필요성을 별도 점검합니다.
+
+---
+
+## 2026-05-01 세션 4: Telegram delivery 문제 확정 및 실제 송신 복구 확인
+
+### 작업 내용
+- A8 Windows와 WSL 양쪽에서 Telegram API DNS/TCP/TLS 연결을 확인했습니다.
+- Hermes env의 Telegram token으로 Bot API `getMe`를 httpx와 `python-telegram-bot` 양쪽에서 확인했습니다.
+- Hermes `TelegramFallbackTransport`의 normal/sticky fallback 경로를 직접 태워 `getMe` 200 OK를 확인했습니다.
+- Hermes `send_message_tool({"target":"telegram"})` 실제 송신을 두 번 실행해 home channel delivery를 확인했습니다.
+- 이전에 남아 있던 OpenClaw `git push origin fix/codex-cli-bootstrap-only` 잔여 프로세스 2개를 종료했습니다. 해당 push는 remote non-fast-forward 상태라 완료될 수 없는 이전 시도였습니다.
+
+### 왜 그렇게 바꿨는지
+- bridge no-send smoke만으로는 실제 Telegram delivery가 정상인지 확정할 수 없었습니다.
+- journal의 `Fallback IP ... failed:` warning은 실제 네트워크 차단인지, polling/fallback 경로의 일시적 warning인지 분리해야 했습니다.
+- 실제 `send_message_tool` 경로를 검증해야 Hermes ↔ OpenClaw 운영 브릿지의 외부 delivery blocker가 제거됐는지 판단할 수 있었습니다.
+
+### 검증/테스트 결과
+- Windows `api.telegram.org:443` DNS/TCP/TLS → PASS
+- WSL `api.telegram.org` 및 fallback IP TLS/socket → PASS
+- Bot API `getMe` → PASS (`HermesA8_bot`)
+- Hermes `TelegramFallbackTransport` normal/sticky `getMe` → PASS
+- Hermes actual Telegram send → PASS, message IDs `1976`, `1977`, `mirrored=true`
+- `systemctl --user show hermes-gateway` → `ActiveState=active`, `SubState=running`, `MainPID=4044919`, `ExecMainStatus=0`, `NRestarts=0`
+- `journalctl --user -u hermes-gateway -n 20` 기준 최신 warning은 02:35:24 KST이고, actual send smoke 이후 신규 warning은 확인되지 않았습니다.
+
+### 리뷰 이력 또는 리스크
+- 이번 세션은 docs/ops confirmation 중심이며 code/config/runtime token 변경은 없습니다.
+- systemd status에는 과거 Telegram fallback warning이 계속 보일 수 있지만, 현재 Bot API와 Hermes send path는 정상입니다.
+- Slack channel은 여전히 별도 config/secret 승인 전이라 미연결 상태입니다.
+- OpenClaw local branch `fix/codex-cli-bootstrap-only`는 remote non-fast-forward라 별도 merge/rebase 승인 없이는 push하지 않습니다.
+
+### 다음 작업
+1. OpenClaw bridge PR/integration branch merge 방식을 결정합니다.
+2. Telegram inbound polling까지 사용자 실사용 메시지로 확인할 수 있으면 추가로 기록합니다.
+3. Slack 알림 채널 연결은 별도 token/config 승인 후 진행합니다.
