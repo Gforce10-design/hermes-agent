@@ -207,7 +207,7 @@ async def test_run_agent_progress_stays_in_originating_topic(monkeypatch, tmp_pa
         }
     ]
     assert adapter.edits
-    assert adapter.edits[-1]["content"] == "상태: 완료\n\ndone"
+    assert adapter.edits[-1]["content"] == "상태: 완료\n응답은 별도 메시지로 전송합니다."
     assert all(call["metadata"] == {"thread_id": "17585"} for call in adapter.typing)
 
 
@@ -588,7 +588,7 @@ async def _run_with_agent(
 
 
 @pytest.mark.asyncio
-async def test_telegram_uses_single_status_card_for_receipt_progress_and_final(monkeypatch, tmp_path):
+async def test_telegram_uses_single_status_card_for_receipt_and_progress_only(monkeypatch, tmp_path):
     adapter, result = await _run_with_agent(
         monkeypatch,
         tmp_path,
@@ -598,12 +598,12 @@ async def test_telegram_uses_single_status_card_for_receipt_progress_and_final(m
     )
 
     assert result["final_response"] == "완료 응답입니다."
-    assert result.get("already_sent") is True
+    assert result.get("already_sent") is not True
     assert len(adapter.sent) == 1
     assert adapter.sent[0]["content"] == "상태: 접수\n요청을 확인했습니다."
     assert adapter.edits
     assert any(call["content"] == "상태: 진행\n작업을 진행 중입니다." for call in adapter.edits)
-    assert adapter.edits[-1]["content"] == "상태: 완료\n\n완료 응답입니다."
+    assert adapter.edits[-1]["content"] == "상태: 완료\n응답은 별도 메시지로 전송합니다."
     visible = "\n".join([adapter.sent[0]["content"], *(call["content"] for call in adapter.edits)])
     assert "terminal" not in visible
     assert "pwd" not in visible
@@ -643,7 +643,7 @@ async def test_telegram_single_status_card_avoids_markdown_expansion_truncation(
 
 
 @pytest.mark.asyncio
-async def test_telegram_single_status_card_uses_utf16_length_for_final_embed(monkeypatch, tmp_path):
+async def test_telegram_single_status_card_uses_utf16_length_for_separate_final(monkeypatch, tmp_path):
     adapter, result = await _run_with_agent(
         monkeypatch,
         tmp_path,
@@ -667,7 +667,7 @@ async def test_run_agent_surfaces_real_interim_commentary(monkeypatch, tmp_path)
         config_data={"display": {"interim_assistant_messages": True}},
     )
 
-    assert result.get("already_sent") is True
+    assert result.get("already_sent") is not True
     visible = "\n".join([*(call["content"] for call in adapter.sent), *(call["content"] for call in adapter.edits)])
     assert "I'll inspect the repo first." not in visible
     assert "상태: 완료" in visible
@@ -697,7 +697,7 @@ async def test_run_agent_suppresses_interim_commentary_when_disabled(monkeypatch
         config_data={"display": {"interim_assistant_messages": False}},
     )
 
-    assert result.get("already_sent") is True
+    assert result.get("already_sent") is not True
     visible = "\n".join([*(call["content"] for call in adapter.sent), *(call["content"] for call in adapter.edits)])
     assert "I'll inspect the repo first." not in visible
     assert "상태: 완료" in visible
@@ -714,7 +714,7 @@ async def test_run_agent_tool_progress_does_not_control_interim_commentary(monke
         config_data={"display": {"tool_progress": "all", "interim_assistant_messages": False}},
     )
 
-    assert result.get("already_sent") is True
+    assert result.get("already_sent") is not True
     visible = "\n".join([*(call["content"] for call in adapter.sent), *(call["content"] for call in adapter.edits)])
     assert "I'll inspect the repo first." not in visible
     assert "상태: 완료" in visible
@@ -756,7 +756,7 @@ async def test_display_streaming_does_not_enable_gateway_streaming(monkeypatch, 
         },
     )
 
-    assert result.get("already_sent") is True
+    assert result.get("already_sent") is not True
     visible = "\n".join([*(call["content"] for call in adapter.sent), *(call["content"] for call in adapter.edits)])
     assert "I'll inspect the repo first." not in visible
     assert "상태: 완료" in visible
@@ -777,7 +777,7 @@ async def test_run_agent_interim_commentary_works_with_tool_progress_off(monkeyp
         },
     )
 
-    assert result.get("already_sent") is True
+    assert result.get("already_sent") is not True
     visible = "\n".join([*(call["content"] for call in adapter.sent), *(call["content"] for call in adapter.edits)])
     assert "I'll inspect the repo first." not in visible
     assert "상태: 완료" in visible
@@ -804,7 +804,7 @@ async def test_run_agent_bluebubbles_uses_commentary_send_path_for_quick_replies
 
 
 @pytest.mark.asyncio
-async def test_run_agent_previewed_final_marks_already_sent(monkeypatch, tmp_path):
+async def test_run_agent_previewed_final_sends_separate_reply_for_telegram_status_card(monkeypatch, tmp_path):
     adapter, result = await _run_with_agent(
         monkeypatch,
         tmp_path,
@@ -813,9 +813,9 @@ async def test_run_agent_previewed_final_marks_already_sent(monkeypatch, tmp_pat
         config_data={"display": {"interim_assistant_messages": True}},
     )
 
-    assert result.get("already_sent") is True
+    assert result.get("already_sent") is not True
     assert adapter.sent[0]["content"] == "상태: 접수\n요청을 확인했습니다."
-    assert adapter.edits[-1]["content"] == "상태: 완료\n\nYou're welcome."
+    assert adapter.edits[-1]["content"] == "상태: 완료\n응답은 별도 메시지로 전송합니다."
 
 
 @pytest.mark.asyncio
@@ -858,7 +858,8 @@ async def test_run_agent_queued_message_does_not_treat_commentary_as_final(monke
     assert result["final_response"] == "final response 2"
     visible = "\n".join([*sent_texts, *(call["content"] for call in adapter.edits)])
     assert "I'll inspect the repo first." not in visible
-    assert "상태: 완료\n\nfinal response 1" in visible or "final response 1" in sent_texts
+    assert "상태: 완료\n응답은 별도 메시지로 전송합니다." in visible
+    assert "final response 1" in sent_texts
 
 
 @pytest.mark.asyncio

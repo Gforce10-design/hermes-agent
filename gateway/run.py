@@ -10892,6 +10892,14 @@ class GatewayRunner:
                         except Exception as e:
                             logger.debug("Stream consumer wait before queued message failed: %s", e)
                     _previewed = bool(result.get("response_previewed"))
+                    if _single_status_card_enabled and not (
+                        _sc and getattr(_sc, "final_response_sent", False)
+                    ):
+                        # Telegram status cards are progress affordances, not
+                        # final delivery. Edited messages do not reliably
+                        # notify users, so a preview flag alone must not skip
+                        # the separate final reply.
+                        _previewed = False
                     _already_streamed = bool(
                         (_sc and getattr(_sc, "final_response_sent", False))
                         or _previewed
@@ -11037,20 +11045,11 @@ class GatewayRunner:
         # at silence.  (#10xxx — "agent stops after web search")
         _sc = stream_consumer_holder[0]
         if isinstance(response, dict) and _single_status_card_enabled and not response.get("failed"):
-            _final_for_card = response.get("final_response") or ""
-            _can_embed_final = (
-                bool(_final_for_card)
-                and _final_for_card != "(empty)"
-                and "MEDIA:" not in _final_for_card
-                and "](" not in _final_for_card
-            )
-            if _can_embed_final and await _send_or_edit_status_card(
-                "완료",
-                final_response=_final_for_card,
-            ):
-                response["already_sent"] = True
-            else:
-                await _send_or_edit_status_card("완료", "응답은 별도 메시지로 전송합니다.")
+            # Keep the Telegram status card as a compact progress indicator.
+            # The final assistant answer is delivered as a normal reply below:
+            # edited messages are easy to miss, do not trigger the same user
+            # notification semantics, and hide delivery from the base send log.
+            await _send_or_edit_status_card("완료", "응답은 별도 메시지로 전송합니다.")
         if isinstance(response, dict) and not response.get("failed"):
             _final = response.get("final_response") or ""
             _is_empty_sentinel = not _final or _final == "(empty)"
@@ -11060,6 +11059,11 @@ class GatewayRunner:
             # response_previewed means the interim_assistant_callback already
             # sent the final text via the adapter (non-streaming path).
             _previewed = bool(response.get("response_previewed"))
+            if _single_status_card_enabled and not _streamed:
+                # A Telegram status-card update is not final answer delivery.
+                # Always allow the normal final send unless the stream consumer
+                # positively confirmed that it already delivered the final text.
+                _previewed = False
             if not _is_empty_sentinel and (_streamed or _previewed):
                 logger.info(
                     "Suppressing normal final send for session %s: final delivery already confirmed (streamed=%s previewed=%s).",

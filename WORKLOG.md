@@ -380,3 +380,29 @@
 1. 사용자가 새 Telegram 메시지를 보내면 inbound -> response -> send 로그를 확인합니다.
 2. 이번 fix를 commit/push하고 임시 patch/smoke 파일을 정리합니다.
 3. Slack 알림 채널은 별도 config/secret 승인 후 연결합니다.
+
+
+## 2026-05-01 03:46 KST - Telegram final reply delivery recovery
+
+### 작업 내용
+- Telegram 단일 상태 카드가 최종 답변까지 edit로 흡수하면서 사용자가 "답이 없는" 것처럼 보이는 문제를 수정했다.
+- `gateway/run.py`에서 Telegram status card는 접수/진행/완료 표시만 맡기고, 최종 assistant 응답은 BasePlatformAdapter의 일반 reply send 경로로 내려가도록 변경했다.
+- queued follow-up 경로에서도 Telegram status-card preview가 `already_sent`로 오인되어 첫 답변을 건너뛰지 않도록 막았다.
+- `tests/gateway/test_run_progress_topics.py`의 기대값을 새 UX 기준으로 갱신했다.
+
+### 검증/테스트
+- `venv/bin/python -m compileall gateway/run.py tests/gateway/test_run_progress_topics.py` 통과.
+- `venv/bin/pytest tests/gateway/test_run_progress_topics.py -q` -> 28 passed.
+- `venv/bin/pytest tests/gateway/test_duplicate_reply_suppression.py tests/gateway/test_telegram_network.py tests/gateway/test_send_retry.py tests/gateway/test_telegram_reply_mode.py -q` -> 129 passed.
+- `venv/bin/python scripts/openclaw_bridge_smoke.py` -> 5 PASS.
+- `git diff --check` 통과.
+- 운영 `hermes-gateway` 재시작 승인 후 PID 4107295 -> 4121922, `active/running`, `NRestarts=0`, `ExecMainStatus=0` 확인.
+
+### 리뷰 이력 / 리스크
+- xrev 기준 수동 리뷰: 최종 답변 suppress 경로, queued follow-up 경로, Telegram network fallback, reply retry 경로 확인. Blocker 없음.
+- 재시작 전 메시지들은 이미 처리되어 자동 재발송되지 않는다. 재시작 후 새 Telegram inbound 한 건으로 실사용 confirmation 필요.
+- A8에 `/tmp/wire_arbiter.py` CPU 98% 장기 실행 프로세스가 남아 있다. 이번 커밋 범위 밖이며, 종료는 별도 승인 후 진행 필요.
+
+### 다음 작업
+- 사용자가 Telegram에 새 테스트 메시지를 보내면 `inbound message -> response ready -> [Telegram] Sending response` 로그와 실제 수신을 확인한다.
+- 확인 후 필요하면 `/tmp/wire_arbiter.py` 잔여 프로세스 정리 승인을 받아 종료한다.
