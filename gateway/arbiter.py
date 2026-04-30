@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -277,7 +278,41 @@ def _matches_rule(rule: Mapping[str, Any], context: Mapping[str, str]) -> bool:
     contains = _text(rule.get("content_contains"))
     if contains and contains not in context.get("content", ""):
         return False
+    patterns = _text_list(rule.get("patterns"))
+    if patterns and not _matches_any_pattern(patterns, context):
+        return False
     return True
+
+
+def _matches_any_pattern(patterns: Iterable[str], context: Mapping[str, str]) -> bool:
+    haystack = "\n".join(
+        value
+        for value in (
+            context.get("topic", ""),
+            context.get("bot", ""),
+            context.get("action", ""),
+            context.get("target", ""),
+            context.get("content", ""),
+        )
+        if value
+    )
+    for pattern in patterns:
+        if not pattern:
+            continue
+        try:
+            if re.search(pattern, haystack, flags=re.IGNORECASE):
+                return True
+        except re.error:
+            if pattern.lower() in haystack.lower():
+                return True
+    return False
+
+
+def _text_list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    values = value if isinstance(value, list) else [value]
+    return [_text(item) for item in values if _text(item)]
 
 
 def _is_duplicate(key: str, trace_id: str | None) -> bool:
