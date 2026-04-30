@@ -1,5 +1,44 @@
 # hermes-agent WORKLOG
 
+## 2026-05-01 세션 1: Hermes ↔ OpenClaw 운영 브릿지 마무리
+
+### 작업 내용
+- Hermes Arbiter가 runtime `bot-routing.yml`의 `global_deny[].patterns`를 평가하도록 고쳤습니다.
+- `action: deny_and_alert` 같은 policy action이 outbound `send` 매칭을 깨지 않도록 수정했습니다.
+- `/home/sudol/.hermes/config/bot-routing.yml`을 백업에서 복원한 뒤 주석을 보존하며 OpenClaw bridge allow rule만 추가했습니다.
+- `hermes-gateway`를 재시작하고 새 PID `4044919` active/running 상태를 확인했습니다.
+- OpenClaw gateway send schema와 delivery hook 경로가 Hermes arbiter metadata를 보존하도록 수정했습니다.
+
+### 왜 그렇게 바꿨는지
+- 이전 상태에서는 OpenClaw가 metadata를 만들어도 gateway schema에서 거부될 수 있었습니다.
+- Hermes runtime deny 정책도 `action: deny_and_alert` 때문에 destructive pattern이 allow rule까지 통과할 수 있어 운영 브릿지라고 부르기 어려웠습니다.
+- 설정 파일은 자동 YAML rewrite 대신 주석 보존형 최소 삽입으로 되돌려 운영 추적성을 지켰습니다.
+
+### 검증/테스트 결과
+- Hermes compileall PASS
+- Hermes arbiter/delivery tests: 20 passed
+- Hermes `scripts/openclaw_bridge_smoke.py`: 5 checks PASS
+- Hermes runtime validation: no metadata bypass, opt-in allow, destructive deny 모두 PASS
+- OpenClaw gateway send test: 36 passed
+- OpenClaw outbound infra tests: 50 passed across discovered files
+- OpenClaw touched-file format check PASS
+- OpenClaw `tsgo:core`는 unrelated existing model compat/qr-runtime 타입 오류로 실패했습니다.
+
+### 리뷰 이력 또는 리스크
+- xrev blocker 1: runtime `global_deny` patterns bypass → fixed in `ee8341823`
+- xrev blocker 2: OpenClaw gateway `metadata` rejection → fixed in `6269b6fc59`
+- 잔여 리스크: A8 Telegram network is unreachable; actual Telegram send is blocked outside bridge code.
+- 잔여 리스크: OpenClaw current branch remote is non-fast-forward, so verified HEAD was pushed as `feat/hermes-arbiter-gateway-metadata-20260501`.
+- 잔여 리스크: OpenClaw macOS UI dirty files pre-existed and were left untouched.
+
+### 다음 작업
+- A8 Telegram network/DNS/proxy/firewall path 복구 후 actual delivery smoke.
+- OpenClaw branch merge strategy 결정.
+- Hermes helper/dashboard process diagnostic 정리.
+- Slack channel config는 별도 승인 후 연결.
+
+---
+
 ## 2026-04-30 세션 1: `/work` 운영 반영 Gateway 재시작
 
 ### 작업 내용
