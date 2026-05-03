@@ -20,3 +20,27 @@
 ### 관련 산출물
 - `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-03-disk-cleanup-plugin-plan.md`
 - `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-03-disk-cleanup-plugin-save.md`
+
+## [2026-05-04 07:52] implement | OpenClaw Bridge Hermes 통합
+
+### 작업 내용
+- `/home/sudol/.local/bin/openclaw` PATH wrapper를 생성했다.
+- wrapper는 `/home/sudol/openclaw/dist/entry.js`를 `node`로 실행한다.
+- Hermes 번들 플러그인 `plugins/openclaw_bridge` 초안을 실제 discovery/load 가능한 상태로 검증했다.
+- `openclaw_status`, `openclaw_cli`가 `openclaw` toolset으로 등록되는 것을 확인했다.
+- mutating 명령은 allowlist에서 차단되도록 유지했다.
+
+### 검증
+- `command -v openclaw` → `/home/sudol/.local/bin/openclaw`
+- `openclaw --version` → `OpenClaw 2026.4.24 (6269b6f)`
+- `./venv/bin/python -m pytest tests/plugins/test_openclaw_bridge.py -q -o 'addopts='` → `4 passed in 1.01s`
+- `./venv/bin/python -m py_compile plugins/openclaw_bridge/__init__.py plugins/openclaw_bridge/tools.py` 통과
+- `hermes config check` 실행 완료
+- `hermes plugins list`에서 `openclaw-bridge enabled` 확인
+- `hermes tools list`에서 plugin toolset `openclaw` enabled 확인
+- handler smoke: status/version OK, `gateway run` 및 extra-arg mutating 형태 blocked 확인
+
+### 주의
+- OpenClaw gateway runtime은 시작하지 않았다. `openclaw gateway status` 기준 stopped 상태다.
+- Hermes Gateway/Console 재시작은 하지 않았다.
+- 기존 unrelated 변경 `ui-tui/package-lock.json`, `mobile/`은 건드리지 않는다.

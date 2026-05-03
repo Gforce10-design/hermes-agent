@@ -1,0 +1,4 @@
+name: openclaw-bridge
+version: 0.1.0
+description: "Bridge tools for inspecting and safely invoking the local OpenClaw checkout from Hermes."
+author: "Hermes Agent"
