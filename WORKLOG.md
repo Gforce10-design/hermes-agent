@@ -1,5 +1,23 @@
 # hermes-agent WORKLOG
 
+## [2026-05-04 14:07 KST] save | GitHub HTTPS 인증 차단 SSH 우회 고정
+
+### 작업 내용
+- GitHub HTTPS remote push가 비대화형 환경에서 `could not read Username`로 실패한 원인을 확인했다.
+- A8 WSL의 GitHub SSH 인증이 정상임을 확인했다.
+- 전역 Git 설정으로 `https://github.com/` URL을 `git@github.com:` SSH URL로 자동 변환하게 했다.
+- 전역 Git commit identity를 `sudol <sudoli819@gmail.com>`로 설정했다.
+
+### 검증
+- `ssh -T git@github.com` 인증 성공 확인.
+- `git ls-remote https://github.com/Gforce10-design/AlphaMate.git HEAD`가 SSH 변환 경유로 성공.
+- 전역 설정 확인: `url.git@github.com:.insteadOf https://github.com/`, `user.name`, `user.email`.
+
+### 주의
+- GitHub 토큰이나 비밀값은 저장하지 않았다.
+- 운영 서비스 재시작/시스템 재부팅/배포는 하지 않았다.
+
+
 ## [2026-05-03 19:53] save | disk-cleanup 번들 플러그인 활성화
 
 ### 작업 내용
