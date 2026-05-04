@@ -5264,6 +5264,27 @@ class GatewayRunner:
             except Exception as e:
                 logger.debug("Plugin command dispatch failed (non-fatal): %s", e)
 
+        # Harness /work router: route through the canonical risk-based router
+        # skill instead of treating /work as a generic built-in that does
+        # nothing or an unknown command.
+        if command and command.replace("_", "-") == "work":
+            try:
+                from agent.skill_commands import build_skill_invocation_message
+                user_instruction = event.get_command_args().strip()
+                msg = build_skill_invocation_message(
+                    "/hermes-risk-based-work-router",
+                    user_instruction,
+                    task_id=_quick_key,
+                )
+                if msg and not (isinstance(msg, str) and msg.startswith("[Failed to load skill:")):
+                    event.text = msg
+                    command = None
+                else:
+                    return "Failed to load /work router skill."
+            except Exception as e:
+                logger.debug("/work router dispatch failed: %s", e, exc_info=True)
+                return f"Failed to load /work router skill: {e}"
+
         # Skill slash commands: /skill-name loads the skill and sends to agent.
         # resolve_skill_command_key() handles the Telegram underscore/hyphen
         # round-trip so /claude_code from Telegram autocomplete still resolves
@@ -5777,8 +5798,8 @@ class GatewayRunner:
             )
 
             # Read model + compression config from config.yaml.
-            # NOTE: hygiene threshold is intentionally HIGHER than the agent's
-            # own compressor (0.85 vs 0.50).  Hygiene is a safety net for
+            # NOTE: hygiene threshold is intentionally above the agent's
+            # normal compressor threshold (0.85 vs 0.80).  Hygiene is a safety net for
             # sessions that grew too large between turns — it fires pre-agent
             # to prevent API failures.  The agent's own compressor handles
             # normal context management during its tool loop with accurate

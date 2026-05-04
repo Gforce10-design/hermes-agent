@@ -301,7 +301,7 @@ def load_cli_config() -> Dict[str, Any]:
         },
         "compression": {
             "enabled": True,      # Auto-compress when approaching context limit
-            "threshold": 0.50,    # Compress at 50% of model's context limit
+            "threshold": 0.80,    # Compress at 80% of model's context limit
         },
         "agent": {
             "max_turns": 90,  # Default max tool-calling iterations (shared with subagents)
@@ -6292,6 +6292,8 @@ class HermesCLI:
             self.show_help()
         elif canonical == "profile":
             self._handle_profile_command()
+        elif canonical == "work":
+            self._enqueue_work_router_command(cmd_original)
         elif canonical == "tools":
             self._handle_tools_command(cmd_original)
         elif canonical == "toolsets":
@@ -6685,6 +6687,26 @@ class HermesCLI:
         
         return True
     
+    def _enqueue_work_router_command(self, cmd_original: str) -> None:
+        """Route /work through the canonical Harness risk-based router skill."""
+        parts = cmd_original.strip().split(maxsplit=1)
+        user_instruction = parts[1].strip() if len(parts) > 1 else ""
+        try:
+            msg = build_skill_invocation_message(
+                "/hermes-risk-based-work-router",
+                user_instruction,
+                task_id=self.session_id,
+            )
+        except Exception as exc:
+            ChatConsole().print(f"[bold red]Failed to load /work router: {exc}[/]")
+            return
+        if not msg or (isinstance(msg, str) and msg.startswith("[Failed to load skill:")):
+            ChatConsole().print("[bold red]Failed to load /work router[/]")
+            return
+        print("\n⚡ Loading Harness /work router")
+        if hasattr(self, '_pending_input'):
+            self._pending_input.put(msg)
+
     def _handle_background_command(self, cmd: str):
         """Handle /background <prompt> — run a prompt in a separate background session.
 
@@ -9009,6 +9031,39 @@ class HermesCLI:
             except Exception:
                 pass
 
+    def _claude_code_fallback_entry(self) -> dict | None:
+        try:
+            from agent.external_cli_fallback import first_claude_code_fallback
+            return first_claude_code_fallback(getattr(self, "_fallback_model", None))
+        except Exception:
+            return None
+
+    def _try_claude_code_cli_fallback(self, user_message, *, reason: str = "") -> Optional[str]:
+        entry = self._claude_code_fallback_entry()
+        if not entry:
+            return None
+        try:
+            from agent.external_cli_fallback import run_claude_code_fallback
+            _cprint(f"\n{_DIM}Codex 응답이 끊겨 Claude Code CLI로 폴백합니다.{_RST}")
+            result = run_claude_code_fallback(
+                user_message,
+                history=self.conversation_history,
+                model=entry.get("model"),
+                timeout=int(entry.get("timeout", 180) or 180),
+                cwd=os.getcwd(),
+            )
+        except Exception as exc:
+            logging.warning("Claude Code CLI fallback failed: %s", exc, exc_info=True)
+            return None
+        if not result.get("ok"):
+            logging.warning("Claude Code CLI fallback failed: %s", result.get("error"))
+            return None
+        response = (result.get("response") or "").strip()
+        if response:
+            self.conversation_history.append({"role": "assistant", "content": response})
+            return response
+        return None
+
     def chat(self, message, images: list = None) -> Optional[str]:
         """
         Send a message to the agent and get a response.
@@ -9146,6 +9201,7 @@ class HermesCLI:
         try:
             # Run the conversation with interrupt monitoring
             result = None
+            agent_thread_abandoned = False
 
             # Reset streaming display state for this turn
             self._reset_stream_state()
@@ -9349,6 +9405,7 @@ class HermesCLI:
                     if getattr(self, '_should_exit', False):
                         break
                 if agent_thread.is_alive():
+                    agent_thread_abandoned = True
                     logger.warning(
                         "Agent thread still alive after interrupt "
                         "(thread %s). Daemon thread will be cleaned up "
@@ -9359,6 +9416,13 @@ class HermesCLI:
                 # Normal completion: agent thread should be done already,
                 # but guard against edge cases.
                 agent_thread.join(timeout=30)
+                if agent_thread.is_alive():
+                    agent_thread_abandoned = True
+                    logger.warning(
+                        "Agent thread still alive after normal completion wait "
+                        "(thread %s). Trying external fallback if configured.",
+                        agent_thread.ident,
+                    )
 
             # Freeze per-prompt elapsed timer once the agent thread has
             # exited (or been abandoned as a daemon after interrupt).
@@ -9392,8 +9456,11 @@ class HermesCLI:
             sys.stdout.flush()
             time.sleep(0.15)
 
-            # Update history with full conversation
-            self.conversation_history = result.get("messages", self.conversation_history) if result else self.conversation_history
+            # Update history with full conversation. Preserve the existing
+            # user turn when an exception path returns an empty messages list;
+            # external fallbacks still need that context for persistence.
+            if result and result.get("messages"):
+                self.conversation_history = result.get("messages", self.conversation_history)
 
             # If auto-compression fired mid-turn, the agent created a new
             # continuation session and mutated self.agent.session_id. Sync
@@ -9411,6 +9478,40 @@ class HermesCLI:
 
             # Get the final response
             response = result.get("final_response", "") if result else ""
+
+            # If the primary Codex turn got abandoned or failed due to a
+            # transient transport/runtime failure, use the configured Claude
+            # Code CLI fallback so the user's latest instruction is answered
+            # instead of being silently dropped.
+            fallback_reason = ""
+            fallback_message = None
+            if agent_thread_abandoned:
+                fallback_reason = "agent thread abandoned"
+                fallback_message = interrupt_msg or message
+            elif result and result.get("failed"):
+                try:
+                    from agent.external_cli_fallback import is_transient_runtime_error
+                    if is_transient_runtime_error(result.get("error") or response):
+                        fallback_reason = str(result.get("error") or response)
+                        fallback_message = message
+                except Exception:
+                    pass
+            if fallback_message is not None:
+                _fallback_response = self._try_claude_code_cli_fallback(
+                    fallback_message, reason=fallback_reason
+                )
+                if _fallback_response:
+                    response = _fallback_response
+                    result = {
+                        "final_response": response,
+                        "messages": self.conversation_history,
+                        "api_calls": result.get("api_calls", 0) if result else 0,
+                        "completed": True,
+                        "failed": False,
+                        "external_fallback": "claude-code",
+                    }
+                    if agent_thread_abandoned:
+                        interrupt_msg = None
 
             # Auto-generate session title after first exchange (non-blocking)
             if response and result and not result.get("failed") and not result.get("partial"):

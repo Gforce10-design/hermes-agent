@@ -1,5 +1,48 @@
 # hermes-agent WORKLOG
 
+## [2026-05-04 18:26 KST] save | Codex hang 원인 조사 + 자동압축 착륙 정책
+
+### 작업 내용
+- 이전 세션 무응답 재발 로그를 재조사해 `context summary` 실패, `Agent thread still alive after interrupt`, `[Errno 9] Bad file descriptor`가 겹친 것을 확인했다.
+- 사후 fallback만으로는 부족하며, Codex Responses stream/auxiliary compression 호출의 timeout/interrupt 경계를 근본 수정해야 한다고 정리했다.
+- 자동압축 정책을 사용자의 의도에 맞게 정리했다: 80% 이상에서만 실행, 70~75%는 착륙 절차 시작 구간.
+- 착륙 절차는 새 하위작업 중단, 진행 중인 작업 최소 완결 단위 축소, 코드리뷰·검증·세이브, git/다른 머신·세션 인계 준비를 포함한다.
+- Obsidian raw/dev 계획과 세이브 기록을 남겼다.
+
+### 검증
+- `git diff --check` 통과.
+- focused pytest: `149 passed, 1 skipped in 5.03s`.
+
+### 관련 산출물
+- 계획: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-04-codex-thread-hang-root-fix-plan.md`
+- 세이브: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-04-codex-hang-landing-policy-save.md`
+
+### 주의
+- Gateway/Console 서비스 재시작은 하지 않았다.
+- 시스템 재부팅/배포/G3 작업은 하지 않았다.
+- 기존 unrelated 변경 `ui-tui/package-lock.json`, `mobile/`은 건드리지 않았다.
+
+## [2026-05-04 17:16 KST] implement | Claude Code CLI fallback + Harness /work router
+
+### 작업 내용
+- Codex 스트림/런타임 장애 또는 interrupt 후 agent thread hang 시 Claude Code CLI fallback을 실행하는 `agent/external_cli_fallback.py`를 추가했다.
+- CLI `chat()`에서 transient failure 및 abandoned thread 상태를 감지해 `fallback_providers: claude-code`를 실제 `claude -p` subprocess로 사용하게 했다.
+- `/work`를 Hermes 명령 registry에 등록하고, CLI/Gateway에서 `hermes-risk-based-work-router` Harness micro-router skill로 라우팅하게 했다.
+- 컨텍스트 자동압축 기본 임계값 잔존 50% 기본값을 80%로 맞췄다: `hermes_cli/config.py`, `cli.py`, `hermes_cli/setup.py`.
+- `hermes-agent` skill의 compression threshold 문서값도 0.80으로 갱신했다.
+
+### 검증
+- `py_compile`: `agent/external_cli_fallback.py`, `cli.py`, `gateway/run.py`, `hermes_cli/commands.py`, `hermes_cli/config.py`, `hermes_cli/setup.py` 통과.
+- focused pytest: `149 passed, 1 skipped`.
+- Claude Code CLI smoke: `claude -p ... --model opus --output-format json --max-turns 1` → `ping`.
+- 실제 사용자 환경 skill smoke: `/hermes-risk-based-work-router` invocation 로딩 OK.
+- xrev 독립 리뷰 후 지적사항 반영: `/work` leading slash key, 히스토리 보존, 50% 잔존 기본값.
+
+### 주의
+- Gateway/Console 서비스 재시작은 하지 않았다.
+- 기존 unrelated 변경 `ui-tui/package-lock.json`, `mobile/`은 건드리지 않았다.
+- 아직 커밋/푸시는 하지 않았다.
+
 ## [2026-05-04 14:07 KST] save | GitHub HTTPS 인증 차단 SSH 우회 고정
 
 ### 작업 내용
