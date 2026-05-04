@@ -7,6 +7,12 @@
 - 이번 추가 수정으로 bare `테스트`/`test`/`ping`류 단독 문구는 코드 검증으로 라우팅하지 않고 gateway health OK 응답을 즉시 반환한다.
 - A8 stale `python /tmp/wire_arbiter.py` CPU 98% 프로세스는 종료했다.
 
+## Codex stream timeout sync candidate
+- Clean worktree branch: `sync/codex-stream-timeout-fork-main` based on `fork/main`.
+- Cherry-picked intent from `def03d4ce fix: harden codex stream timeouts`.
+- Scope: Codex auxiliary Responses stream timeout forwarding, main Codex stream resolved timeout, and interrupt-before-final-response guard.
+- Service restart/reboot/deploy not performed in this branch.
+
 ## 이번 세션에서 한 일
 - `gateway/run.py`
   - `_is_gateway_health_probe()` 추가: standalone smoke-test 단어만 감지.

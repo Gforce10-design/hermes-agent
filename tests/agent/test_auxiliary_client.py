@@ -1413,3 +1413,44 @@ class TestAuxiliaryAuthRefreshRetry:
         mock_refresh.assert_called_once_with("anthropic")
         assert stale_client.chat.completions.create.await_count == 1
         assert fresh_client.chat.completions.create.await_count == 1
+
+
+class TestCodexResponsesTimeoutForwarding:
+    def test_timeout_is_forwarded_to_codex_responses_stream(self):
+        from types import SimpleNamespace
+        from agent.auxiliary_client import _CodexCompletionsAdapter
+
+        fake_final = SimpleNamespace(
+            output=[SimpleNamespace(
+                type="message",
+                content=[SimpleNamespace(type="output_text", text="hi")],
+            )],
+            usage=SimpleNamespace(input_tokens=1, output_tokens=1, total_tokens=2),
+        )
+
+        class _FakeStream:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def __iter__(self):
+                return iter(())
+
+            def get_final_response(self):
+                return fake_final
+
+        captured = {}
+
+        def _stream(**kwargs):
+            captured.update(kwargs)
+            return _FakeStream()
+
+        real_client = MagicMock()
+        real_client.responses.stream = _stream
+        adapter = _CodexCompletionsAdapter(real_client, "gpt-5.3-codex")
+
+        adapter.create(messages=[{"role": "user", "content": "hi"}], timeout=12.5)
+
+        assert captured.get("timeout") == 12.5

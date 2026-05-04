@@ -1,5 +1,20 @@
 # hermes-agent WORKLOG
 
+## [2026-05-05 03:40 KST] mainline-sync | Codex stream timeout fix clean cherry-pick
+
+### 작업 내용
+- `fork/main` 기준 clean worktree에서 `def03d4ce fix: harden codex stream timeouts`의 핵심 변경만 이식한다.
+- Codex auxiliary Responses stream timeout forwarding, main stream timeout injection, interrupt 후 final response 재진입 차단을 mainline 후보에 반영한다.
+
+### 검증 예정
+- `py_compile`: `agent/auxiliary_client.py`, `agent/codex_responses_adapter.py`, `run_agent.py`.
+- focused pytest: auxiliary timeout forwarding + Codex stream timeout/interrupt regression tests.
+- `git diff --check`.
+
+### 주의
+- 기존 main worktree의 unrelated `ui-tui/package-lock.json`, `mobile/`는 별도 clean worktree 전략으로 건드리지 않는다.
+- 서비스 재시작, 시스템 재부팅, G3 배포는 하지 않는다.
+
 ## 2026-05-01 세션 1: Hermes ↔ OpenClaw 운영 브릿지 마무리
 
 ### 작업 내용

@@ -485,6 +485,59 @@ def test_run_codex_stream_fallback_parses_create_stream_events(monkeypatch):
     assert response.output[0].content[0].text == "streamed create ok"
 
 
+def test_run_codex_stream_applies_resolved_timeout(monkeypatch):
+    agent = _build_agent(monkeypatch)
+    monkeypatch.setattr(agent, "_resolved_api_call_timeout", lambda: 9.25)
+    captured = {}
+
+    def _fake_stream(**kwargs):
+        captured.update(kwargs)
+        return _FakeResponsesStream(final_response=_codex_message_response("ok"))
+
+    agent.client = SimpleNamespace(
+        responses=SimpleNamespace(
+            stream=_fake_stream,
+            create=lambda **kwargs: _codex_message_response("fallback"),
+        )
+    )
+
+    agent._run_codex_stream(_codex_request_kwargs())
+    assert captured.get("timeout") == 9.25
+
+
+def test_run_codex_stream_interrupt_skips_final_response(monkeypatch):
+    agent = _build_agent(monkeypatch)
+
+    class _InterruptingStream:
+        final_called = False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def __iter__(self):
+            agent._interrupt_requested = True
+            return iter([SimpleNamespace(type="response.in_progress")])
+
+        def get_final_response(self):
+            self.final_called = True
+            raise AssertionError("get_final_response must not run after interrupt")
+
+    stream = _InterruptingStream()
+    agent.client = SimpleNamespace(
+        responses=SimpleNamespace(
+            stream=lambda **kwargs: stream,
+            create=lambda **kwargs: _codex_message_response("fallback"),
+        )
+    )
+
+    with pytest.raises(InterruptedError):
+        agent._run_codex_stream(_codex_request_kwargs())
+    assert stream.final_called is False
+
+
 def test_run_conversation_codex_plain_text(monkeypatch):
     agent = _build_agent(monkeypatch)
     monkeypatch.setattr(agent, "_interruptible_api_call", lambda api_kwargs: _codex_message_response("OK"))
