@@ -1,5 +1,28 @@
 # hermes-agent WORKLOG
 
+## [2026-05-04 21:02 KST] implement | Codex stream/compression timeout·interrupt root fix
+
+### 작업 내용
+- Codex auxiliary compression 경로에서 `call_llm(..., timeout=...)` 값이 `_CodexCompletionsAdapter`를 거쳐 `responses.stream()`까지 전달되도록 수정했다.
+- main Codex Responses stream 경로에서 `_run_codex_stream()`이 resolved per-call timeout을 실제 stream kwargs에 주입하도록 수정했다.
+- Codex stream interrupt 감지 후 `stream.get_final_response()`로 재진입하지 않고 `InterruptedError`로 빠져나오도록 수정했다.
+- fallback `responses.create(stream=True)` 경로도 동일 timeout kwargs를 유지하도록 하고, Codex preflight에서 `timeout`을 허용/정규화했다.
+- 회귀 테스트 3개를 추가했다: auxiliary timeout forwarding, main stream timeout forwarding, interrupt 후 final_response 차단.
+
+### 검증
+- RED 확인: 신규 테스트 3개가 구현 전 모두 실패.
+- GREEN 확인: 신규 테스트 3개 통과.
+- Codex 관련 focused pytest: `71 passed in 25.89s`.
+- 기존 fallback/work/compression subset: `149 passed, 1 skipped in 3.87s`.
+- `py_compile`: `agent/auxiliary_client.py`, `agent/codex_responses_adapter.py`, `run_agent.py` 통과.
+- `git diff --check` 통과.
+- xrev 독립 리뷰: 치명적 문제 없음, 회귀 위험 낮음.
+
+### 주의
+- Gateway/Console 서비스 재시작은 하지 않았다.
+- 시스템 재부팅/G3 배포는 하지 않았다.
+- 기존 unrelated 변경 `ui-tui/package-lock.json`, `mobile/`은 건드리지 않았다.
+
 ## [2026-05-04 18:26 KST] save | Codex hang 원인 조사 + 자동압축 착륙 정책
 
 ### 작업 내용

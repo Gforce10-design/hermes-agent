@@ -1631,6 +1631,14 @@ class TestCodexAdapterReasoningTranslation:
         assert "reasoning" not in captured
         assert "include" not in captured
 
+    def test_timeout_is_forwarded_to_codex_responses_stream(self):
+        """Auxiliary Codex calls must preserve the caller timeout at the real
+        Responses streaming boundary so compression cannot hang indefinitely.
+        """
+        adapter, captured = self._build_adapter()
+        adapter.create(messages=[{"role": "user", "content": "hi"}], timeout=12.5)
+        assert captured.get("timeout") == 12.5
+
     def test_extra_body_without_reasoning_key_is_noop(self):
         adapter, captured = self._build_adapter()
         adapter.create(

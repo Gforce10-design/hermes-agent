@@ -5808,6 +5808,9 @@ class AIAgent:
         import httpx as _httpx
 
         active_client = client or self._ensure_primary_openai_client(reason="codex_stream_direct")
+        request_kwargs = dict(api_kwargs)
+        if request_kwargs.get("timeout") is None:
+            request_kwargs["timeout"] = self._resolved_api_call_timeout()
         max_stream_retries = 1
         has_tool_calls = False
         first_delta_fired = False
@@ -5820,7 +5823,7 @@ class AIAgent:
                 raise InterruptedError("Agent interrupted before Codex stream retry")
             collected_output_items: list = []
             try:
-                with active_client.responses.stream(**api_kwargs) as stream:
+                with active_client.responses.stream(**request_kwargs) as stream:
                     for event in stream:
                         self._touch_activity("receiving stream response")
                         if self._interrupt_requested:
@@ -5868,6 +5871,8 @@ class AIAgent:
                                 sum(len(p) for p in self._codex_streamed_text_parts),
                                 self._client_log_context(),
                             )
+                    if self._interrupt_requested:
+                        raise InterruptedError("Agent interrupted during Codex stream")
                     final_response = stream.get_final_response()
                     # PATCH: ChatGPT Codex backend streams valid output items
                     # but get_final_response() can return an empty output list.
@@ -5908,7 +5913,7 @@ class AIAgent:
                     self._client_log_context(),
                     exc,
                 )
-                return self._run_codex_create_stream_fallback(api_kwargs, client=active_client)
+                return self._run_codex_create_stream_fallback(request_kwargs, client=active_client)
             except RuntimeError as exc:
                 err_text = str(exc)
                 missing_completed = "response.completed" in err_text
@@ -5925,7 +5930,7 @@ class AIAgent:
                         "Responses stream did not emit response.completed; falling back to create(stream=True). %s",
                         self._client_log_context(),
                     )
-                    return self._run_codex_create_stream_fallback(api_kwargs, client=active_client)
+                    return self._run_codex_create_stream_fallback(request_kwargs, client=active_client)
                 raise
 
     def _run_codex_create_stream_fallback(self, api_kwargs: dict, client: Any = None):
