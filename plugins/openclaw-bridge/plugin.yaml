@@ -1,8 +1,10 @@
 name: openclaw-bridge
-version: 0.1.0
-description: OpenClaw bridge marker and status plugin for Hermes delivery arbitration.
+version: 0.2.0
+description: Read-only OpenClaw bridge tools for Hermes worker/status inspection.
 author: Hermes Agent
 kind: standalone
 provides_hooks: []
-provides_tools: []
+provides_tools:
+  - openclaw_status
+  - openclaw_cli
 requires_env: []

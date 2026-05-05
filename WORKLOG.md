@@ -1,5 +1,35 @@
 # hermes-agent WORKLOG
 
+## [2026-05-05 23:34 KST] implement | OpenClaw bridge read-only toolset
+
+### 작업 내용
+- `openclaw-bridge` bundled plugin을 marker plugin에서 실제 read-only `openclaw` toolset provider로 확장했다.
+- `openclaw_status`, `openclaw_cli` 도구를 등록하고, OpenClaw CLI 호출을 exact argv allowlist로 제한했다.
+- subprocess 실행은 `shell=False`, bounded stdout/stderr, timeout, process group kill, structured JSON result로 보강했다.
+- descendant가 stdout/stderr pipe를 잡고 있는 timeout 회귀 테스트를 추가했다.
+
+### 핵심 결정
+- 이번 phase는 Hermes가 OpenClaw를 안전하게 조회/진단하는 bridge까지만 구현한다.
+- 자동 worker handoff/agent turn loop는 별도 spike로 분리한다.
+- mutating command(`gateway restart` 등)는 allowlist에서 차단한다.
+
+### 검증
+- `tests/plugins/test_openclaw_bridge_plugin.py`: `10 passed`.
+- `tests/hermes_cli/test_plugins.py` + bridge tests: `68 passed, 2 warnings`.
+- `py_compile`: `plugins/openclaw-bridge/__init__.py`, `plugins/openclaw-bridge/tools.py` 통과.
+- `git diff --check` 통과.
+- 실제 registry smoke: status/version 성공, `gateway restart` 차단 확인.
+- 독립 xrev: Critical 없음. 신뢰되지 않은 `OPENCLAW_BIN`의 daemonize escape는 known limitation으로 기록.
+
+### 관련 산출물
+- 계획: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-05-openclaw-worker-trigger-plan.md`
+- 세이브: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-05-openclaw-bridge-save.md`
+
+### 주의
+- OpenClaw 자동 worker/router loop는 아직 미구현이다.
+- 서비스 재시작/시스템 재부팅/G3 배포는 하지 않았다.
+- 민감정보는 저장하지 않았다.
+
 ## [2026-05-05 16:06 KST] save | Hermes fork/main 확인 + OpenClaw gateway token auth
 
 ### 작업 내용
