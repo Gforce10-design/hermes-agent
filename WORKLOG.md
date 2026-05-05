@@ -10,7 +10,7 @@
 - OpenClaw gateway config를 loopback 유지 상태에서 `auth.mode=token`으로 보강했다.
 
 ### 핵심 결정
-- Hermes 기본 작업트리는 `main...fork/main [ahead 1115, behind 33]`와 unrelated dirty가 있어 직접 merge/rebase/reset하지 않았다.
+- Hermes 기본 작업트리는 `fork/main`과 크게 diverged 상태이고 unrelated dirty가 있어 직접 merge/rebase/reset하지 않았다.
 - OpenClaw는 외부 노출 없이 `gateway.bind=loopback`, `gateway.mode=local`을 유지했다.
 - token 값은 노출하지 않고 config에 존재 여부만 확인했다.
 
