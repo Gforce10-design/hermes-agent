@@ -1,30 +1,23 @@
-# HANDOFF — OpenClaw PR #78115 merge permission watcher
+# HANDOFF — Auto-save shared-state surface update
 
 ## 현재 상태
-- PR: https://github.com/openclaw/openclaw/pull/78115
-- PR state: open
-- merged: false
-- head: `45b2af4e8f70`
-- mergeable_state: clean
-- 사용자는 contributor 권한이라 GitHub UI에 merge 버튼이 보이지 않는다.
+- `hermes-agent-auto-save` 스킬이 업데이트되었다.
+- 세이브 시 전체 모델/런타임(Hermes, OpenClaw, Codex, Claude Code 등)과 전체 머신(A8/Desktop/G3/Windows/WSL 등) 상태를 남기도록 반영했다.
+- 사용자가 지적한 기존 동기화 파일 확인 누락을 바로잡았다.
 
-## 등록한 Cron
-- job_id: `eb4ea3e7ea50`
-- name: `openclaw-pr-78115-merge-permission-watch`
-- schedule: every 30m
-- repeat: 96 times
-- deliver: `telegram:Gforce10 / Dr.에르메스`
-- next_run_at: 2026-05-06 08:37 KST
+## 기존 동기화 표면
+- Shared-state worktree: `/home/sudol/worktrees/vibecoding-shared-state-20260506/`
+- Contract: `docs/shared-ai-realtime-state.md`
+- Event/snapshot examples: `shared-state/events.example.jsonl`, `shared-state/status.example.json`
+- Helpers: `tools/save/append_shared_event.ps1`, `tools/save/collect_shared_state.ps1`
+- Router handoff: `/home/sudol/worktrees/vibecoding-shared-state-20260506/HANDOFF.md`
+- Dashboard handoff: `/home/sudol/worktrees/alphamate-dashboard-controltower-ui-20260506/HANDOFF.md`
 
-## Cron 동작
-- PR이 merged/closed 되었거나, 인증된 방식으로 merge 권한이 확인되면 Telegram Dr.에르메스로 보고한다.
-- 공개 API만으로는 권한을 단정하지 않는다.
-- no-change 상태는 보고하지 않는다.
-- 안전 제한: merge, close, update branch, push, PR edit, comment 금지.
+## 다음 원칙
+- 새 cross-runtime/machine sync 파일을 만들기 전에 위 기존 shared-state/HANDOFF 표면을 먼저 확인한다.
+- 적합한 기존 표면이 있으면 거기에 맞춰 상태를 남긴다.
+- 상태를 private agent context에만 남기지 않는다.
 
-## 다음 단계
-- cron 결과를 기다린다.
-- 사용자가 GitHub UI에서 merge 버튼이 생겼다고 알려주면 직접 PR 상태 재확인 후 안내한다.
-
-## 주의
-- 시스템 재부팅, 서비스 재시작, G3 배포/재시작은 하지 않았다.
+## 저장
+- Obsidian raw/dev note: `hermes-2026-05-06-auto-save-shared-state-skill-save.md`
+- 시스템 재부팅, 서비스 재시작, G3 배포/재시작 없음.

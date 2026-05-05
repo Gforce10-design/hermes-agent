@@ -1,20 +1,21 @@
 # hermes-agent WORKLOG
 
-## 2026-05-06 | OpenClaw PR #78115 merge permission watch save
+## 2026-05-06 | Auto-save shared-state surface update
 
 ### 작업 내용
-- OpenClaw PR #78115 화면에서 merge 버튼이 보이지 않는 이유를 확인했다.
-- PR은 `open`, `merged=false`, `mergeable_state=clean` 상태이고, 사용자 권한은 contributor라 직접 merge 버튼이 없는 것으로 판단했다.
-- 권한 부여 또는 PR 상태 변화를 감시하는 cron job을 등록했다.
-- 보고 대상은 Telegram `Gforce10 / Dr.에르메스`로 설정했다.
+- `hermes-agent-auto-save` 스킬에 cross-model / cross-machine sync record 요구사항을 추가했다.
+- 사용자가 지적한 대로, 새 동기화 파일을 만들기 전에 이미 존재하는 shared-state/HANDOFF 표면을 확인하도록 보정했다.
+- 실제 기존 동기화 표면을 확인했다.
 
-### 핵심 결정
-- 공개 GitHub API만으로 merge 권한을 단정하지 않는다.
-- 인증된 권한 확인이 가능하거나 PR merged/closed 상태가 되면 보고한다.
-- no-change 상태는 Telegram에 스팸 보고하지 않는다.
+### 확인한 기존 동기화 표면
+- `/home/sudol/worktrees/vibecoding-shared-state-20260506/docs/shared-ai-realtime-state.md`
+- `/home/sudol/worktrees/vibecoding-shared-state-20260506/shared-state/events.example.jsonl`
+- `/home/sudol/worktrees/vibecoding-shared-state-20260506/shared-state/status.example.json`
+- `/home/sudol/worktrees/vibecoding-shared-state-20260506/tools/save/append_shared_event.ps1`
+- `/home/sudol/worktrees/vibecoding-shared-state-20260506/tools/save/collect_shared_state.ps1`
+- `/home/sudol/worktrees/vibecoding-shared-state-20260506/HANDOFF.md`
+- `/home/sudol/worktrees/alphamate-dashboard-controltower-ui-20260506/HANDOFF.md`
 
 ### 검증
-- Cron job `eb4ea3e7ea50` 등록 확인.
-- schedule: `every 30m`, repeat: `96 times`.
-- deliver: `telegram:Gforce10 / Dr.에르메스`.
-- PR #78115 현재 상태: open, merged=false, head `45b2af4e8f70`, mergeable_state=clean.
+- `hermes-agent-auto-save` skill_view로 반영 확인.
+- Obsidian raw/dev save note 생성 완료.
