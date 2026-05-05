@@ -3,7 +3,7 @@
 ## 현재 상태
 - 브랜치: `main` (기본 작업트리), `fork/main`과 크게 diverged 상태라 직접 동기화하지 않음.
 - Hermes clean worktree: `/home/sudol/.hermes/hermes-agent-sync-codex-stuck-20260505`.
-- clean worktree HEAD: `03877bde6 fix: preserve context when compression summary fails`, `fork/main`과 일치.
+- clean worktree는 `fork/main` 메인라인 반영 검증에 사용됨.
 - OpenClaw gateway: systemd enabled/running, `127.0.0.1:18789`, `auth.mode=token`, health OK.
 - AlphaVaults는 Claude Code가 진행 중이라 이번 Hermes 작업 범위에서 제외.
 
