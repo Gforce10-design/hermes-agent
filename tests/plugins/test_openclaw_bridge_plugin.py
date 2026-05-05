@@ -111,6 +111,18 @@ def test_openclaw_worker_trigger_execute_requires_local_contract_and_trace(monke
                 "argv": ["worker", "trigger", "loop"],
                 "execute": True,
                 "approval_state": "approved_local_contract",
+                "approval_token": "trusted-token",
+            }
+        )
+    )
+    monkeypatch.setenv("OPENCLAW_WORKER_TRIGGER_APPROVAL_TOKEN", "trusted-token")
+    missing_token = _decode(
+        tools_mod.handle_openclaw_worker_trigger(
+            {
+                "argv": ["worker", "trigger", "loop"],
+                "execute": True,
+                "approval_state": "approved_local_contract",
+                "trace_id": "trace-1",
             }
         )
     )
@@ -120,6 +132,18 @@ def test_openclaw_worker_trigger_execute_requires_local_contract_and_trace(monke
                 "argv": ["worker", "trigger", "loop"],
                 "execute": True,
                 "approval_state": "approved_remote_contract",
+                "approval_token": "trusted-token",
+                "trace_id": "trace-1",
+            }
+        )
+    )
+    wrong_token = _decode(
+        tools_mod.handle_openclaw_worker_trigger(
+            {
+                "argv": ["worker", "trigger", "loop"],
+                "execute": True,
+                "approval_state": "approved_local_contract",
+                "approval_token": "caller-supplied-wrong-token",
                 "trace_id": "trace-1",
             }
         )
@@ -130,6 +154,7 @@ def test_openclaw_worker_trigger_execute_requires_local_contract_and_trace(monke
                 "argv": ["worker", "trigger", "loop"],
                 "execute": True,
                 "approval_state": "approved_local_contract",
+                "approval_token": "trusted-token",
                 "trace_id": "trace-2",
             }
         )
@@ -137,8 +162,12 @@ def test_openclaw_worker_trigger_execute_requires_local_contract_and_trace(monke
 
     assert missing_trace["success"] is False
     assert missing_trace["accepted"] is False
+    assert missing_token["success"] is False
+    assert missing_token["accepted"] is False
     assert wrong_approval["success"] is False
     assert wrong_approval["accepted"] is False
+    assert wrong_token["success"] is False
+    assert wrong_token["accepted"] is False
     assert executed["success"] is True
     assert executed["accepted"] is True
     assert executed["trace_id"] == "trace-2"

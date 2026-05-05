@@ -37,6 +37,7 @@ ALLOWED_WORKER_TRIGGER_ARGV: tuple[tuple[str, ...], ...] = (
     ("worker", "trigger", "loop"),
 )
 APPROVED_LOCAL_CONTRACT = "approved_local_contract"
+APPROVAL_TOKEN_ENV = "OPENCLAW_WORKER_TRIGGER_APPROVAL_TOKEN"
 
 
 def _json(data: dict[str, Any]) -> str:
@@ -265,7 +266,8 @@ OPENCLAW_WORKER_TRIGGER_SCHEMA = {
     "description": (
         "Validate or execute the exact allowlisted OpenClaw worker trigger loop. "
         "dry_run=true only validates. execute=true requires approval_state "
-        "approved_local_contract and a non-empty trace_id."
+        "approved_local_contract, a non-empty trace_id, and approval_token matching "
+        "the local OPENCLAW_WORKER_TRIGGER_APPROVAL_TOKEN environment value."
     ),
     "parameters": {
         "type": "object",
@@ -281,7 +283,7 @@ OPENCLAW_WORKER_TRIGGER_SCHEMA = {
             },
             "execute": {
                 "type": "boolean",
-                "description": "Execute only when approval_state and trace_id satisfy the local contract.",
+                "description": "Execute only when approval_state, trace_id, and approval_token satisfy the local contract.",
             },
             "approval_state": {
                 "type": "string",
@@ -290,6 +292,10 @@ OPENCLAW_WORKER_TRIGGER_SCHEMA = {
             "trace_id": {
                 "type": "string",
                 "description": "Required non-empty caller trace id when execute=true.",
+            },
+            "approval_token": {
+                "type": "string",
+                "description": "Required when execute=true; must match the local approval token environment value.",
             },
         },
         "required": ["argv"],
@@ -368,6 +374,8 @@ def handle_openclaw_worker_trigger(args: dict[str, Any] | None = None, **_: Any)
 
     approval_state = payload.get("approval_state")
     trace_id = payload.get("trace_id")
+    approval_token = payload.get("approval_token")
+    expected_token = os.environ.get(APPROVAL_TOKEN_ENV)
     if approval_state != APPROVED_LOCAL_CONTRACT:
         return _json(
             {
@@ -390,6 +398,18 @@ def handle_openclaw_worker_trigger(args: dict[str, Any] | None = None, **_: Any)
                 "execute": True,
                 "argv": list(argv),
                 "error": "execute=true requires a non-empty trace_id.",
+            }
+        )
+    if not expected_token or approval_token != expected_token:
+        return _json(
+            {
+                "success": False,
+                "accepted": False,
+                "allowed": True,
+                "dry_run": dry_run,
+                "execute": True,
+                "argv": list(argv),
+                "error": f"execute=true requires approval_token matching {APPROVAL_TOKEN_ENV}.",
             }
         )
 
