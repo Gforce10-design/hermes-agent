@@ -9033,6 +9033,10 @@ class HermesCLI:
 
     def _claude_code_fallback_entry(self) -> dict | None:
         try:
+            if self.agent is not None:
+                entry = getattr(self.agent, "_external_cli_fallback", None)
+                if entry:
+                    return entry
             from agent.external_cli_fallback import first_claude_code_fallback
             return first_claude_code_fallback(getattr(self, "_fallback_model", None))
         except Exception:
@@ -9047,7 +9051,7 @@ class HermesCLI:
             _cprint(f"\n{_DIM}Codex 응답이 끊겨 Claude Code CLI로 폴백합니다.{_RST}")
             result = run_claude_code_fallback(
                 user_message,
-                history=self.conversation_history,
+                history=[],
                 model=entry.get("model"),
                 timeout=int(entry.get("timeout", 180) or 180),
                 cwd=os.getcwd(),
@@ -9506,9 +9510,10 @@ class HermesCLI:
                         "final_response": response,
                         "messages": self.conversation_history,
                         "api_calls": result.get("api_calls", 0) if result else 0,
-                        "completed": True,
-                        "failed": False,
-                        "external_fallback": "claude-code",
+                        "completed": False,
+                        "failed": True,
+                        "degraded_recovery": True,
+                        "external_cli_fallback": True,
                     }
                     if agent_thread_abandoned:
                         interrupt_msg = None

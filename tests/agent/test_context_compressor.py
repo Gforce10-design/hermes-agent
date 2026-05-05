@@ -64,21 +64,22 @@ class TestCompress:
         result = compressor.compress(msgs)
         assert result == msgs
 
-    def test_truncation_fallback_no_client(self, compressor):
-        # compressor has client=None, so should use truncation fallback
+    def test_summary_unavailable_preserves_messages(self, compressor):
+        # If no auxiliary client is available, compression must defer instead
+        # of dropping real messages behind a generic marker.
         msgs = [{"role": "system", "content": "System prompt"}] + self._make_messages(10)
         result = compressor.compress(msgs)
-        assert len(result) < len(msgs)
-        # Should keep system message and last N
-        assert result[0]["role"] == "system"
-        assert compressor.compression_count == 1
+        assert result == msgs
+        assert compressor._last_summary_fallback_used is True
+        assert compressor._last_summary_dropped_count == 0
+        assert compressor.compression_count == 0
 
-    def test_compression_increments_count(self, compressor):
+    def test_failed_compression_does_not_increment_count(self, compressor):
         msgs = self._make_messages(10)
         compressor.compress(msgs)
-        assert compressor.compression_count == 1
+        assert compressor.compression_count == 0
         compressor.compress(msgs)
-        assert compressor.compression_count == 2
+        assert compressor.compression_count == 0
 
     def test_protects_first_and_last(self, compressor):
         msgs = self._make_messages(10)
@@ -129,7 +130,9 @@ class TestGenerateSummaryNoneContent:
             for i in range(10)
         ]
         result = c.compress(msgs)
-        assert len(result) < len(msgs)
+        assert result == msgs
+        assert c._last_summary_fallback_used is True
+        assert c._last_summary_dropped_count == 0
 
 
 class TestNonStringContent:
@@ -469,11 +472,14 @@ class TestAuxModelFallbackSurfacedToCallers:
 
 
 class TestSummaryFailureTrackingForGatewayWarning:
-    """When summary generation fails, the compressor must record dropped count
-    + fallback flag so gateway hygiene & /compress can surface a visible
-    warning instead of silently dropping context."""
+    """When summary generation fails, the compressor must not drop earlier turns.
 
-    def test_compress_records_fallback_and_dropped_count_on_summary_failure(self):
+    A static marker is visible, but replacing real turns with that marker is
+    context loss.  The safe behavior is to abort compression and leave the
+    original messages intact so a later retry or fallback can summarize them.
+    """
+
+    def test_compress_preserves_messages_on_summary_failure(self):
         with patch("agent.context_compressor.get_model_context_length", return_value=100000):
             c = ContextCompressor(model="test", quiet_mode=True, protect_first_n=2, protect_last_n=2)
 
@@ -494,10 +500,10 @@ class TestSummaryFailureTrackingForGatewayWarning:
             result = c.compress(msgs)
 
         assert c._last_summary_fallback_used is True
-        assert c._last_summary_dropped_count > 0
+        assert c._last_summary_dropped_count == 0
         assert c._last_summary_error is not None
-        # Result must still be well-formed (fallback summary present).
-        assert any(
+        assert result == msgs
+        assert not any(
             isinstance(m.get("content"), str) and "Summary generation was unavailable" in m["content"]
             for m in result
         )

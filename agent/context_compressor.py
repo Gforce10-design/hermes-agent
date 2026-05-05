@@ -1258,6 +1258,7 @@ The user has requested that this compaction PRIORITISE preserving all informatio
         self._last_summary_error = None
         self._last_aux_model_failure_error = None
         self._last_aux_model_failure_model = None
+        original_messages = [m.copy() if isinstance(m, dict) else m for m in messages]
         n_messages = len(messages)
         # Only need head + 3 tail messages minimum (token budget decides the real tail size)
         _min_for_compress = self.protect_first_n + 3 + 1
@@ -1330,21 +1331,18 @@ The user has requested that this compaction PRIORITISE preserving all informatio
                     )
             compressed.append(msg)
 
-        # If LLM summary failed, insert a static fallback so the model
-        # knows context was lost rather than silently dropping everything.
+        # If LLM summary failed, abort the compression rather than replacing
+        # real conversation turns with a generic marker.  The marker made the
+        # loss visible, but it still caused unrecoverable task-state loss.  Keep
+        # the original messages intact so a later retry or external fallback can
+        # summarize them safely.
         if not summary:
             if not self.quiet_mode:
-                logger.warning("Summary generation failed — inserting static fallback context marker")
-            n_dropped = compress_end - compress_start
-            self._last_summary_dropped_count = n_dropped
+                logger.warning("Summary generation failed — preserving original messages and deferring compression")
+            self._last_summary_dropped_count = 0
             self._last_summary_fallback_used = True
-            summary = (
-                f"{SUMMARY_PREFIX}\n"
-                f"Summary generation was unavailable. {n_dropped} message(s) were "
-                f"removed to free context space but could not be summarized. The removed "
-                f"messages contained earlier work in this session. Continue based on the "
-                f"recent messages below and the current state of any files or resources."
-            )
+            self._ineffective_compression_count += 1
+            return original_messages
 
         _merge_summary_into_tail = False
         last_head_role = messages[compress_start - 1].get("role", "user") if compress_start > 0 else "user"

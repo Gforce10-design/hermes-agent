@@ -1,5 +1,34 @@
 # hermes-agent WORKLOG
 
+## [2026-05-05 10:29 KST] implement | Codex stuck 방지 + Claude CLI 안전망 제한 연결
+
+### 작업 내용
+- context compression summary 실패 시 static marker로 중간 메시지를 대체/드롭하지 않고 원본 메시지를 그대로 보존하도록 변경했다.
+- 실패한 compression은 `compression_count`를 증가시키지 않고 `_last_summary_fallback_used=True`, `_last_summary_dropped_count=0`으로 기록하게 했다.
+- `claude-code` fallback entry를 API provider fallback과 분리해 external CLI 안전망으로만 사용하게 했다.
+- Claude CLI 자동 fallback은 transient max-retry exhausted 상황에서만 작동하며, `history=[]`, `--tools ''`, `shell=False`로 제한했다.
+- CLI 경로도 동일하게 히스토리 미전달/degraded status 정책을 적용했다.
+- live 설정에서 `agent.api_max_retries=1`, `auxiliary.compression.timeout=60`으로 조정했다.
+
+### 검증
+- RED: summary 실패 시 메시지 보존 테스트가 기존 구현에서 실패함을 확인.
+- focused pytest: `141 passed`.
+- `py_compile`: `agent/context_compressor.py`, `agent/external_cli_fallback.py`, `run_agent.py`, `cli.py` 통과.
+- `git diff --check` 통과.
+- `hermes config check` 통과.
+- 독립 코드리뷰 2회 후 지적사항 반영, 최종 리뷰 통과.
+
+### 관련 산출물
+- 계획: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-05-claude-code-cli-fallback-plan.md`
+- 세이브: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-05-codex-stuck-prevention-claude-fallback-save.md`
+
+### 주의
+- Gateway/Console 서비스 재시작은 하지 않았다.
+- 시스템 재부팅/G3 배포는 하지 않았다.
+- 실제 Claude CLI smoke 명령은 승인 차단되어 재시도하지 않았다.
+- 기존 unrelated 변경 `ui-tui/package-lock.json`, `mobile/`은 건드리지 않았다.
+- live config 변경은 repo commit에 포함되지 않으므로 `/home/sudol/.hermes/config.yaml`에서 별도 관리된다.
+
 ## [2026-05-04 21:02 KST] implement | Codex stream/compression timeout·interrupt root fix
 
 ### 작업 내용

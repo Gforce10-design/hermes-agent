@@ -13,7 +13,7 @@ import subprocess
 from typing import Any, Iterable
 
 
-CLAUDE_CODE_PROVIDER_NAMES = {"claude-code", "claude_cli", "claude-cli", "claude"}
+CLAUDE_CODE_PROVIDER_NAMES = {"claude-code", "claude_cli", "claude-cli"}
 _TRANSIENT_ERROR_MARKERS = (
     "peer closed connection without sending complete message body",
     "incomplete chunked read",
@@ -119,6 +119,8 @@ def run_claude_code_fallback(
         "json",
         "--max-turns",
         "3",
+        "--tools",
+        "",
     ]
     try:
         proc = subprocess.run(
@@ -129,6 +131,7 @@ def run_claude_code_fallback(
             stderr=subprocess.PIPE,
             timeout=timeout,
             check=False,
+            shell=False,
         )
     except subprocess.TimeoutExpired:
         return {"ok": False, "error": f"Claude Code CLI timed out after {timeout}s"}

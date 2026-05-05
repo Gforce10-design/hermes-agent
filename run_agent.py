@@ -1569,6 +1569,11 @@ class AIAgent:
             self._fallback_chain = []
         self._fallback_index = 0
         self._fallback_activated = getattr(self, "_fallback_activated", False)
+        try:
+            from agent.external_cli_fallback import first_claude_code_fallback as _first_cli_fb
+            self._external_cli_fallback = _first_cli_fb(self._fallback_chain)
+        except Exception:
+            self._external_cli_fallback = None
         # Legacy attribute kept for backward compat (tests, external callers)
         self._fallback_model = self._fallback_chain[0] if self._fallback_chain else None
         if self._fallback_chain and not self.quiet_mode:
@@ -2455,6 +2460,11 @@ class AIAgent:
             ]
         self._fallback_chain = fallback_chain
         self._fallback_model = fallback_chain[0] if fallback_chain else None
+        try:
+            from agent.external_cli_fallback import first_claude_code_fallback as _first_cli_fb
+            self._external_cli_fallback = _first_cli_fb(fallback_chain)
+        except Exception:
+            self._external_cli_fallback = None
 
         logging.info(
             "Model switched in-place: %s (%s) -> %s (%s)",
@@ -6331,6 +6341,37 @@ class AIAgent:
                 drop_context_1m_beta=_drop_1m,
             )
 
+    def _try_external_cli_fallback(self, user_message: Any, *, history: list | None = None, error: Any = None) -> str | None:
+        """Return a concise external CLI fallback response, or None.
+
+        This is a last-resort recovery path for transient runtime failures
+        (Codex stream disconnects/timeouts).  It does not replace Hermes tool
+        execution; it only produces a user-visible answer so the session does
+        not appear stuck after the primary runtime fails.
+        """
+        if self._interrupt_requested:
+            return None
+        entry = getattr(self, "_external_cli_fallback", None)
+        if not entry:
+            return None
+        try:
+            from agent.external_cli_fallback import is_transient_runtime_error, run_claude_code_fallback
+            if error is not None and not is_transient_runtime_error(error):
+                return None
+            self._emit_status("Codex 응답이 끊겨 Claude Code CLI로 폴백합니다.")
+            result = run_claude_code_fallback(
+                user_message,
+                history=history or [],
+                model=entry.get("model"),
+                timeout=int(entry.get("timeout") or 180),
+            )
+            if result.get("ok") and str(result.get("response") or "").strip():
+                return str(result.get("response")).strip()
+            logger.warning("External CLI fallback failed: %s", result.get("error"))
+        except Exception as exc:
+            logger.warning("External CLI fallback crashed: %s", exc)
+        return None
+
     def _interruptible_api_call(self, api_kwargs: dict):
         """
         Run the API call in a background thread so the main conversation loop
@@ -7495,6 +7536,13 @@ class AIAgent:
         self._fallback_index += 1
         fb_provider = (fb.get("provider") or "").strip().lower()
         fb_model = (fb.get("model") or "").strip()
+        try:
+            from agent.external_cli_fallback import is_claude_code_provider as _is_cli_fb
+            if _is_cli_fb(fb_provider):
+                logging.info("Skipping external CLI fallback entry in API provider fallback chain: %s", fb_provider)
+                return self._try_activate_fallback(reason=reason)
+        except Exception:
+            pass
         if not fb_provider or not fb_model:
             return self._try_activate_fallback()  # skip invalid, try next
 
@@ -12724,6 +12772,23 @@ class AIAgent:
                                 api_kwargs, reason="max_retries_exhausted", error=api_error,
                             )
                         self._persist_session(messages, conversation_history)
+                        _cli_fallback_response = self._try_external_cli_fallback(
+                            user_message,
+                            history=[],
+                            error=api_error,
+                        )
+                        if _cli_fallback_response:
+                            messages.append({"role": "assistant", "content": _cli_fallback_response})
+                            self._persist_session(messages, conversation_history)
+                            return {
+                                "final_response": _cli_fallback_response,
+                                "messages": messages,
+                                "api_calls": api_call_count,
+                                "completed": False,
+                                "failed": True,
+                                "degraded_recovery": True,
+                                "external_cli_fallback": True,
+                            }
                         _final_response = f"API call failed after {max_retries} retries: {_final_summary}"
                         if _is_stream_drop:
                             _final_response += (
