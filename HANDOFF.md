@@ -2,34 +2,35 @@
 
 ## 현재 상태
 - 브랜치: `main`.
-- 현재 작업은 Hermes `openclaw-bridge` read-only toolset 구현 세이브 커밋에 포함될 상태다.
-- OpenClaw bridge 도구: `openclaw_status`, `openclaw_cli`.
-- OpenClaw gateway 조회는 실제 registry smoke에서 성공했고, mutating command는 차단된다.
+- 최신 완료 작업: Telegram DM topic auto session registration 구현/검증 완료.
+- Hermes gateway live config에는 `Dr.에르메스` 수동 DM topic이 이미 생성되어 있고 `thread_id=51117`이다.
+- OpenClaw bridge 작업은 커밋 `8ad64254e feat: add read-only OpenClaw bridge tools`로 저장/푸시 완료되어 있다.
 
 ## 마지막 세션 작업
-- `plugins/openclaw-bridge/__init__.py`에서 plugin register/unregister로 OpenClaw 도구를 등록하도록 변경했다.
-- `plugins/openclaw-bridge/plugin.yaml`을 `0.2.0`으로 갱신하고 provided tools를 명시했다.
-- `plugins/openclaw-bridge/tools.py`를 추가해 exact allowlist, `shell=False`, bounded capture, timeout/process-group kill, structured JSON result를 구현했다.
-- `tests/plugins/test_openclaw_bridge_plugin.py`를 추가해 등록, allowlist, timeout, truncation, descendant pipe holder, toolset visibility를 검증했다.
+- `gateway/platforms/telegram.py`에 unknown Telegram DM topic runtime auto-register를 추가했다.
+- unknown DM topic은 `topic <thread_id>` fallback 이름으로 등록되고 `auto_registered=True`로 표시된다.
+- explicit operator config/hot-load topic binding이 runtime fallback cache보다 우선하도록 `_get_dm_topic_info()` 흐름을 조정했다.
+- `gateway/config.py`에서 top-level `telegram.auto_register_dm_topics`를 `platforms.telegram.extra`로 bridge했다.
+- `tests/gateway/test_telegram_thread_fallback.py`에 auto-register, disable, hot-load override 회귀 테스트를 추가했다.
 
 ## 검증
+- `tests/gateway/test_telegram_thread_fallback.py`: `13 passed`.
 - `tests/plugins/test_openclaw_bridge_plugin.py`: `10 passed`.
-- `tests/hermes_cli/test_plugins.py` + bridge tests: `68 passed, 2 warnings`.
-- `py_compile`: bridge plugin files 통과.
+- `py_compile`: `gateway/platforms/telegram.py`, `gateway/config.py`, `tests/gateway/test_telegram_thread_fallback.py` 통과.
 - `git diff --check` 통과.
-- 실제 registry smoke: `openclaw_status` 성공, `openclaw_cli --version` 성공, `openclaw_cli gateway restart` 차단.
-- 독립 리뷰: Critical 없음. Important known limitation: 신뢰되지 않은 `OPENCLAW_BIN`이 별도 세션으로 daemonize하면 killpg만으로는 후손 프로세스 종료를 보장하지 못한다.
+- `hermes config check` 통과.
+- 독립 코드 리뷰: Critical/Important 없음.
 
 ## 관련 산출물
-- 계획: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-05-openclaw-worker-trigger-plan.md`
-- 세이브: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-05-openclaw-bridge-save.md`
+- 계획: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-05-telegram-auto-topic-session-plan.md`
+- 세이브: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-06-telegram-auto-topic-session-save.md`
+- Dr.에르메스 수동 topic 계획: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-05-telegram-dr-hermes-topic-plan.md`
 
 ## 다음 작업
-- Hermes supervisor → OpenClaw specialist/worker handoff는 별도 spike로 설계/구현한다.
-- 필요하면 bridge plugin enable 상태와 다음 세션 toolset 노출을 확인한다.
-- OpenClaw agent turn/full worker loop는 현재 구현 범위 밖이다.
+- live Hermes gateway 서비스를 재시작해 새 코드 반영.
+- 새 Telegram DM topic에서 메시지 수신 시 세션 생성/응답을 확인.
 
 ## 알려진 이슈 / 주의
-- 현재 구현은 read-only bridge이며 자동 OpenClaw worker trigger loop가 아니다.
-- 서비스 재시작, 시스템 재부팅, G3 배포는 하지 않았다.
-- GitHub 토큰/비밀값은 저장하지 않았다.
+- 서비스 재시작은 Hermes gateway 프로세스 재시작이며 시스템 재부팅이 아니다.
+- OpenClaw bridge는 read-only toolset이며 full worker trigger loop는 아직 별도 범위다.
+- GitHub 토큰/Telegram 토큰/비밀값은 저장하지 않았다.

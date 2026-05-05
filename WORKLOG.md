@@ -1,5 +1,29 @@
 # hermes-agent WORKLOG
 
+## [2026-05-06 00:01 KST] implement | Telegram DM topic auto session registration
+
+### 작업 내용
+- Telegram DM topics에서 사전 등록되지 않은 새 토픽도 `message_thread_id` 기준 별도 세션으로 사용할 수 있게 했다.
+- unknown DM topic은 런타임에 `topic <thread_id>` fallback 이름으로 등록하고, `auto_registered=True`로 표시한다.
+- 운영자가 나중에 config에 실제 topic name/skill binding을 추가하면 hot-load된 explicit config가 fallback cache보다 우선되도록 했다.
+- top-level `telegram.auto_register_dm_topics` 설정을 `platforms.telegram.extra`로 bridge했다.
+
+### 검증
+- RED: unknown DM topic auto-register 테스트가 기존 구현에서 실패함을 확인.
+- `tests/gateway/test_telegram_thread_fallback.py`: `13 passed`.
+- `tests/plugins/test_openclaw_bridge_plugin.py`: `10 passed`.
+- `py_compile`: `gateway/platforms/telegram.py`, `gateway/config.py`, `tests/gateway/test_telegram_thread_fallback.py` 통과.
+- `git diff --check`, `hermes config check` 통과.
+- 독립 코드 리뷰: Critical/Important 없음.
+
+### 관련 산출물
+- 계획: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-05-telegram-auto-topic-session-plan.md`
+- 세이브: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-06-telegram-auto-topic-session-save.md`
+
+### 주의
+- 새 코드 반영에는 Hermes gateway 서비스 재시작이 필요하다.
+- 서비스 재시작은 시스템 재부팅이 아니다.
+
 ## [2026-05-05 23:34 KST] implement | OpenClaw bridge read-only toolset
 
 ### 작업 내용

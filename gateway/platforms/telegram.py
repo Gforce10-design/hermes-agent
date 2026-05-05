@@ -2914,6 +2914,42 @@ class TelegramAdapter(BasePlatformAdapter):
         except Exception as e:
             logger.debug("[%s] Failed to reload dm_topics from config: %s", self.name, e)
 
+    def _auto_register_dm_topics_enabled(self) -> bool:
+        """Return whether unknown Telegram DM topics should be registered at runtime."""
+        configured = self.config.extra.get("auto_register_dm_topics", True)
+        if isinstance(configured, str):
+            return configured.strip().lower() not in ("0", "false", "no", "off")
+        return bool(configured)
+
+    def _fallback_dm_topic_name(self, thread_id: str) -> str:
+        """Build a safe display name for a DM topic when Telegram did not expose one."""
+        return f"topic {thread_id}"
+
+    def _find_dm_topic_config(
+        self,
+        chat_id: str,
+        thread_id_int: int,
+        *,
+        include_auto_registered: bool = False,
+    ) -> Optional[Dict[str, Any]]:
+        """Find a configured DM topic by chat/thread, optionally including runtime fallbacks."""
+        for chat_entry in self._dm_topics_config:
+            if not isinstance(chat_entry, dict) or str(chat_entry.get("chat_id")) != str(chat_id):
+                continue
+            for topic in chat_entry.get("topics", []):
+                if not isinstance(topic, dict):
+                    continue
+                try:
+                    topic_thread_id = int(topic.get("thread_id"))
+                except (TypeError, ValueError):
+                    continue
+                if topic_thread_id != thread_id_int:
+                    continue
+                if topic.get("auto_registered") and not include_auto_registered:
+                    continue
+                return topic
+        return None
+
     def _get_dm_topic_info(self, chat_id: str, thread_id: Optional[str]) -> Optional[Dict[str, Any]]:
         """Look up DM topic config by chat_id and thread_id.
 
@@ -2923,9 +2959,20 @@ class TelegramAdapter(BasePlatformAdapter):
         if not thread_id:
             return None
 
-        thread_id_int = int(thread_id)
+        try:
+            thread_id_int = int(thread_id)
+        except (TypeError, ValueError):
+            return None
 
-        # Check cached topics first (created by us or loaded at startup)
+        # Prefer explicit operator config over runtime fallback cache.  Reload
+        # first so a newly added skill/name binding can take effect without a
+        # gateway restart.
+        self._reload_dm_topics_from_config()
+        configured_topic = self._find_dm_topic_config(chat_id, thread_id_int)
+        if configured_topic:
+            return configured_topic
+
+        # Check cached topics next (created by us or loaded at startup)
         for key, cached_tid in self._dm_topics.items():
             if cached_tid == thread_id_int and key.startswith(f"{chat_id}:"):
                 topic_name = key.split(":", 1)[1]
@@ -2953,15 +3000,55 @@ class TelegramAdapter(BasePlatformAdapter):
 
         return None
 
-    def _cache_dm_topic_from_message(self, chat_id: str, thread_id: str, topic_name: str) -> None:
+    def _cache_dm_topic_from_message(
+        self,
+        chat_id: str,
+        thread_id: str,
+        topic_name: str,
+        *,
+        topic_config: Optional[Dict[str, Any]] = None,
+    ) -> None:
         """Cache a thread_id -> topic_name mapping discovered from an incoming message."""
         cache_key = f"{chat_id}:{topic_name}"
+        try:
+            thread_id_int = int(thread_id)
+        except (TypeError, ValueError):
+            logger.debug("[%s] Ignoring non-numeric Telegram DM topic thread id: %r", self.name, thread_id)
+            return
+
         if cache_key not in self._dm_topics:
-            self._dm_topics[cache_key] = int(thread_id)
+            self._dm_topics[cache_key] = thread_id_int
             logger.info(
                 "[%s] Cached DM topic from message: %s -> thread_id=%s",
                 self.name, cache_key, thread_id,
             )
+
+        # Keep the runtime config mirror in sync so _get_dm_topic_info() can
+        # return the same topic dict later without requiring a config restart.
+        chat_entry = None
+        for entry in self._dm_topics_config:
+            if isinstance(entry, dict) and str(entry.get("chat_id")) == str(chat_id):
+                chat_entry = entry
+                break
+        if chat_entry is None:
+            chat_entry = {"chat_id": int(chat_id) if str(chat_id).isdigit() else chat_id, "topics": []}
+            self._dm_topics_config.append(chat_entry)
+
+        topics = chat_entry.setdefault("topics", [])
+        if not isinstance(topics, list):
+            topics = []
+            chat_entry["topics"] = topics
+
+        for topic in topics:
+            if isinstance(topic, dict) and str(topic.get("thread_id")) == str(thread_id):
+                topic.setdefault("name", topic_name)
+                return
+
+        new_topic = dict(topic_config or {})
+        new_topic.setdefault("name", topic_name)
+        new_topic["thread_id"] = thread_id_int
+        new_topic.setdefault("auto_registered", True)
+        topics.append(new_topic)
 
     def _build_message_event(
         self,
@@ -3007,6 +3094,10 @@ class TelegramAdapter(BasePlatformAdapter):
                     self._cache_dm_topic_from_message(str(chat.id), thread_id_str, created_name)
                     if not chat_topic:
                         chat_topic = created_name
+
+            if not chat_topic and self._auto_register_dm_topics_enabled():
+                chat_topic = self._fallback_dm_topic_name(thread_id_str)
+                self._cache_dm_topic_from_message(str(chat.id), thread_id_str, chat_topic)
 
         elif chat_type == "group" and thread_id_str:
             # Group/supergroup forum topic skill binding via config.extra['group_topics']

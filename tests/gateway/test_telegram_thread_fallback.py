@@ -104,6 +104,83 @@ def _make_adapter():
     return adapter
 
 
+def test_unconfigured_dm_topic_auto_registers_with_fallback_name():
+    """Unconfigured Telegram DM topics should still become usable thread sessions."""
+    adapter = _make_adapter()
+    adapter.config.extra = {"auto_register_dm_topics": True}
+    message = SimpleNamespace(
+        text="hello from a new topic",
+        caption=None,
+        chat=SimpleNamespace(
+            id=123,
+            type="private",
+            title=None,
+            full_name="Gforce10",
+        ),
+        from_user=SimpleNamespace(id=123, full_name="Gforce10"),
+        message_thread_id=777,
+        reply_to_message=None,
+        message_id=10,
+        date=None,
+    )
+
+    event = adapter._build_message_event(message, msg_type=SimpleNamespace(value="text"))
+
+    assert event.source.chat_id == "123"
+    assert event.source.chat_type == "dm"
+    assert event.source.thread_id == "777"
+    assert event.source.chat_topic == "topic 777"
+    assert adapter._get_dm_topic_info("123", "777")["name"] == "topic 777"
+
+
+def test_unconfigured_dm_topic_auto_register_can_be_disabled():
+    """Operators can disable automatic DM topic registration."""
+    adapter = _make_adapter()
+    adapter.config.extra = {"auto_register_dm_topics": False}
+    message = SimpleNamespace(
+        text="hello from an ignored topic",
+        caption=None,
+        chat=SimpleNamespace(
+            id=123,
+            type="private",
+            title=None,
+            full_name="Gforce10",
+        ),
+        from_user=SimpleNamespace(id=123, full_name="Gforce10"),
+        message_thread_id=888,
+        reply_to_message=None,
+        message_id=11,
+        date=None,
+    )
+
+    event = adapter._build_message_event(message, msg_type=SimpleNamespace(value="text"))
+
+    assert event.source.thread_id == "888"
+    assert event.source.chat_topic is None
+    assert adapter._get_dm_topic_info("123", "888") is None
+
+
+def test_configured_dm_topic_overrides_runtime_fallback_cache(monkeypatch):
+    """Hot-loaded operator config should override an earlier fallback topic name."""
+    adapter = _make_adapter()
+    adapter.config.extra = {"auto_register_dm_topics": True}
+    adapter._cache_dm_topic_from_message("123", "777", "topic 777")
+
+    def fake_reload():
+        adapter._dm_topics_config = [
+            {"chat_id": 123, "topics": [{"name": "Research", "thread_id": 777, "skill": "research"}]}
+        ]
+        adapter._dm_topics["123:Research"] = 777
+
+    monkeypatch.setattr(adapter, "_reload_dm_topics_from_config", fake_reload)
+
+    assert adapter._get_dm_topic_info("123", "777") == {
+        "name": "Research",
+        "thread_id": 777,
+        "skill": "research",
+    }
+
+
 def test_forum_general_topic_without_message_thread_id_keeps_thread_context():
     """Forum General-topic messages should keep synthetic thread context."""
     from gateway.platforms import telegram as telegram_mod
