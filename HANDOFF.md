@@ -1,31 +1,30 @@
-# HANDOFF — OpenClaw worker trigger PR #78115
+# HANDOFF — OpenClaw PR #78115 merge permission watcher
 
 ## 현재 상태
-- OpenClaw repo: `/home/sudol/openclaw`
-- Branch: `feat/worker-trigger-loop-local-contract-20260506`
-- Fork remote branch: `origin/feat/worker-trigger-loop-local-contract-20260506`
-- Latest PR head: `45b2af4e8f70`
 - PR: https://github.com/openclaw/openclaw/pull/78115
-- PR state: open, draft=false, mergeable=true
+- PR state: open
+- merged: false
+- head: `45b2af4e8f70`
+- mergeable_state: clean
+- 사용자는 contributor 권한이라 GitHub UI에 merge 버튼이 보이지 않는다.
 
-## 완료한 작업
-- upstream/main이 이동한 뒤 branch를 다시 rebase했다.
-- `pnpm openclaw worker trigger loop` 실행 결과 `executed:false` JSON proof 확인.
-- `pnpm test src/commands/worker-trigger.test.ts src/cli/program/command-registry.test.ts` 통과.
-- fork branch force-with-lease push 완료.
-- PR 본문을 Real behavior proof 포함 버전으로 교체 후 PR 생성 완료 확인.
+## 등록한 Cron
+- job_id: `eb4ea3e7ea50`
+- name: `openclaw-pr-78115-merge-permission-watch`
+- schedule: every 30m
+- repeat: 96 times
+- deliver: `telegram:Gforce10 / Dr.에르메스`
+- next_run_at: 2026-05-06 08:37 KST
 
-## CI 상태
-- GitHub check-runs 조회 기준 실패 항목 없음.
-- 현재 일부 checks는 queued/in_progress 상태.
-- Real behavior proof, preflight, actionlint, no-tabs, security fast 계열은 success 확인됨.
+## Cron 동작
+- PR이 merged/closed 되었거나, 인증된 방식으로 merge 권한이 확인되면 Telegram Dr.에르메스로 보고한다.
+- 공개 API만으로는 권한을 단정하지 않는다.
+- no-change 상태는 보고하지 않는다.
+- 안전 제한: merge, close, update branch, push, PR edit, comment 금지.
 
-## 다음 작업
-1. PR #78115 check-runs 재조회.
-2. 실패가 나오면 최신 head SHA `45b2af4e8f70` 기준으로 해당 run/job 로그 확인.
-3. required checks가 모두 green이면 merge 가능 여부 확인.
+## 다음 단계
+- cron 결과를 기다린다.
+- 사용자가 GitHub UI에서 merge 버튼이 생겼다고 알려주면 직접 PR 상태 재확인 후 안내한다.
 
 ## 주의
-- `gh`와 GitHub API token은 현재 환경에 없다.
-- `/home/sudol/openclaw/PR_DRAFT_worker_trigger_loop_local_contract_20260506.md`는 로컬 untracked 보조자료이며 PR branch에 커밋하지 않는다.
-- 시스템 재부팅, G3 배포/재시작은 하지 않았다.
+- 시스템 재부팅, 서비스 재시작, G3 배포/재시작은 하지 않았다.
