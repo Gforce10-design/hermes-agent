@@ -1,5 +1,36 @@
 # hermes-agent WORKLOG
 
+## [2026-05-05 16:06 KST] save | Hermes fork/main 확인 + OpenClaw gateway token auth
+
+### 작업 내용
+- AlphaVaults는 Claude Code 진행 중으로 확인되어 이번 범위에서 제외했다.
+- `fork/main` 기준 clean worktree `/home/sudol/.hermes/hermes-agent-sync-codex-stuck-20260505`를 생성/정리해 최신 main 상태를 검증했다.
+- `fork/main` HEAD `03877bde6`에 Codex compression no-loss 패치가 이미 반영되어 있음을 확인했다.
+- 로컬 커밋 `f8eac92fe` cherry-pick은 중복 충돌로 판단해 abort했고, 원격 main과 clean worktree HEAD가 일치함을 확인했다.
+- OpenClaw gateway config를 loopback 유지 상태에서 `auth.mode=token`으로 보강했다.
+
+### 핵심 결정
+- Hermes 기본 작업트리는 `main...fork/main [ahead 1115, behind 33]`와 unrelated dirty가 있어 직접 merge/rebase/reset하지 않았다.
+- OpenClaw는 외부 노출 없이 `gateway.bind=loopback`, `gateway.mode=local`을 유지했다.
+- token 값은 노출하지 않고 config에 존재 여부만 확인했다.
+
+### 검증
+- Hermes clean worktree focused pytest: `105 passed`.
+- `py_compile`: `agent/context_compressor.py`, `run_agent.py`, `cli.py` 통과.
+- `git diff --check` 통과.
+- OpenClaw gateway: systemd enabled/running, connectivity OK, health OK, `auth token` 표시 확인.
+- Hermes gateway: active/running 확인.
+
+### 관련 산출물
+- 계획: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-05-main-sync-openclaw-auth-alphavaults-plan.md`
+- 세이브: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-05-main-sync-openclaw-auth-save.md`
+- OpenClaw config backup: `/home/sudol/.openclaw/openclaw.json.bak-auth-token-20260505-160302`
+
+### 주의
+- 기본 Hermes 작업트리의 unrelated `tinker-atropos`, `ui-tui/package-lock.json`, `mobile/`은 건드리지 않았다.
+- OpenClaw repo의 macOS Swift UI dirty 파일은 건드리지 않았다.
+- 시스템 재부팅/G3 배포는 하지 않았다.
+
 ## [2026-05-05 10:29 KST] implement | Codex stuck 방지 + Claude CLI 안전망 제한 연결
 
 ### 작업 내용
