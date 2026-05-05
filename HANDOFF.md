@@ -1,26 +1,39 @@
-# HANDOFF - Hermes Codex compression no-loss main sync
+# hermes-agent HANDOFF
 
 ## 현재 상태
-- Clean worktree branch: `sync/codex-stuck-prevention-20260505`, based on `fork/main`.
-- 목적: Codex/auxiliary compression summary 실패 시 context loss를 막는 최소 패치를 `fork/main`에 반영.
-- `fork/main`에는 이미 `claude-code` provider fallback 구현이 있어, 충돌 난 별도 `agent/external_cli_fallback.py` 계열은 이식하지 않는다.
+- 브랜치: `main` (기본 작업트리), `fork/main`과 크게 diverged 상태라 직접 동기화하지 않음.
+- Hermes clean worktree: `/home/sudol/.hermes/hermes-agent-sync-codex-stuck-20260505`.
+- clean worktree HEAD: `03877bde6 fix: preserve context when compression summary fails`, `fork/main`과 일치.
+- OpenClaw gateway: systemd enabled/running, `127.0.0.1:18789`, `auth.mode=token`, health OK.
+- AlphaVaults는 Claude Code가 진행 중이라 이번 Hermes 작업 범위에서 제외.
 
-## 이번 세션에서 한 일
-- `agent/context_compressor.py`
-  - summary 생성 실패 시 static marker를 넣고 중간 turn을 드롭하던 동작을 중단.
-  - 원본 메시지를 그대로 반환해 compression을 보류.
-  - `_last_summary_fallback_used=True`, `_last_summary_dropped_count=0`으로 기록.
-  - 실패한 compression은 `compression_count`를 증가시키지 않음.
-  - provider 미설정 로그도 “드롭”이 아니라 “원본 보존/압축 보류”로 수정.
-- `tests/agent/test_context_compressor.py`
-  - no-client/no-summary 상황에서 원본 보존을 기대하도록 테스트 갱신.
-  - summary가 실제 생성되는 경우에만 `compression_count`가 증가하는지 검증.
+## 마지막 세션 작업
+- Hermes `fork/main` 최신 상태에 Codex compression no-loss 패치가 이미 반영되어 있음을 확인했다.
+- 로컬 `f8eac92fe` cherry-pick은 중복 충돌로 판단해 abort했다.
+- clean worktree에서 focused pytest/compile/diff check를 통과시켰다.
+- OpenClaw `~/.openclaw/openclaw.json`을 백업한 뒤 `gateway.auth.mode=token`으로 보강했다.
+- OpenClaw gateway를 재시작하고 status/health/connectivity를 확인했다.
 
-## 검증 상태
-- `tests/agent/test_context_compressor.py`: 50 passed.
-- 남은 검증: Codex response/CLI busy focused tests, py_compile, diff check, 독립 리뷰.
+## 검증
+- Hermes clean worktree focused pytest: `105 passed`.
+- `py_compile`: `agent/context_compressor.py`, `run_agent.py`, `cli.py` 통과.
+- `git diff --check` 통과.
+- OpenClaw gateway status: running, connectivity OK, admin-capable.
+- OpenClaw gateway health: OK.
+- Hermes gateway status: active/running.
+
+## 관련 산출물
+- 계획: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-05-main-sync-openclaw-auth-alphavaults-plan.md`
+- 세이브: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-05-main-sync-openclaw-auth-save.md`
+- OpenClaw config backup: `/home/sudol/.openclaw/openclaw.json.bak-auth-token-20260505-160302`
+
+## 다음 작업
+- AlphaVaults는 Claude Code 진행 결과를 확인한 뒤 이어받는다.
+- 필요 시 Hermes 기본 작업트리의 unrelated 변경(`tinker-atropos`, `ui-tui/package-lock.json`, `mobile/`)을 별도 정리한다.
+- OpenClaw reverse proxy 노출을 계획할 때만 `trustedProxies`를 별도 보강한다.
 
 ## 알려진 이슈 / 주의
-- 기본 worktree `/home/sudol/.hermes/hermes-agent`는 `main...fork/main [ahead 1115, behind 32]`이며 unrelated `ui-tui/package-lock.json`, `mobile/`가 남아 있다.
-- OpenClaw repo의 macOS Swift UI dirty 파일은 이번 작업과 무관하므로 건드리지 않는다.
-- 서비스 재시작, 시스템 재부팅, G3 배포는 하지 않았다.
+- 기본 작업트리는 unrelated dirty 상태: `tinker-atropos` deletion 표시, `ui-tui/package-lock.json`, `mobile/`.
+- OpenClaw repo의 macOS Swift UI dirty 파일은 이번 작업과 무관하다.
+- 시스템 재부팅/G3 배포는 하지 않았다.
+- GitHub 토큰/비밀값은 저장하지 않았다.
