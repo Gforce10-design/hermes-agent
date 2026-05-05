@@ -1,5 +1,24 @@
 # hermes-agent WORKLOG
 
+## [2026-05-05 14:25 KST] mainline-sync | Codex compression no-loss stuck prevention
+
+### 작업 내용
+- `fork/main` 기준 clean worktree에서 Codex compression summary 실패 시 중간 메시지를 드롭하지 않도록 최소 이식했다.
+- `fork/main`에는 이미 `claude-code` provider fallback 구현이 있어, 충돌 난 별도 external CLI helper는 중복으로 판단해 이식하지 않았다.
+- summary 생성 실패/보조 provider 부재 시 compression을 보류하고 원본 메시지를 보존하도록 변경했다.
+- 실패한 compression은 `compression_count`를 증가시키지 않고 `_last_summary_fallback_used=True`, `_last_summary_dropped_count=0`으로 기록한다.
+
+### 검증 예정
+- `tests/agent/test_context_compressor.py` focused pytest.
+- `tests/run_agent/test_run_agent_codex_responses.py`, `tests/cli/test_cli_steer_busy_path.py` 회귀 확인.
+- `py_compile`: `agent/context_compressor.py`, `run_agent.py`, `cli.py`, `agent/claude_code_cli.py`.
+- `git diff --check` 및 독립 코드리뷰.
+
+### 주의
+- 기존 main worktree의 unrelated `ui-tui/package-lock.json`, `mobile/`는 건드리지 않는다.
+- OpenClaw macOS Swift dirty 파일은 건드리지 않는다.
+- 서비스 재시작, 시스템 재부팅, G3 배포는 이 clean sync 단계에서 하지 않는다.
+
 ## [2026-05-05 03:40 KST] mainline-sync | Codex stream timeout fix clean cherry-pick
 
 ### 작업 내용

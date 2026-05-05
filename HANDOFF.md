@@ -1,57 +1,26 @@
-# HANDOFF - Hermes Telegram Health Probe and OpenClaw Bridge Status
+# HANDOFF - Hermes Codex compression no-loss main sync
 
 ## 현재 상태
-- A8 Hermes repo: `/home/sudol/.hermes/hermes-agent`, branch `dev`.
-- `hermes-gateway` 운영 서비스는 재시작 반영 완료: PID `4124976`, `active/running`, `NRestarts=0`, `ExecMainStatus=0`.
-- Telegram 최종 reply send 경로는 이전 커밋에서 복구 확인됐다.
-- 이번 추가 수정으로 bare `테스트`/`test`/`ping`류 단독 문구는 코드 검증으로 라우팅하지 않고 gateway health OK 응답을 즉시 반환한다.
-- A8 stale `python /tmp/wire_arbiter.py` CPU 98% 프로세스는 종료했다.
-
-## Codex stream timeout sync candidate
-- Clean worktree branch: `sync/codex-stream-timeout-fork-main` based on `fork/main`.
-- Cherry-picked intent from `def03d4ce fix: harden codex stream timeouts`.
-- Scope: Codex auxiliary Responses stream timeout forwarding, main Codex stream resolved timeout, and interrupt-before-final-response guard.
-- Service restart/reboot/deploy not performed in this branch.
+- Clean worktree branch: `sync/codex-stuck-prevention-20260505`, based on `fork/main`.
+- 목적: Codex/auxiliary compression summary 실패 시 context loss를 막는 최소 패치를 `fork/main`에 반영.
+- `fork/main`에는 이미 `claude-code` provider fallback 구현이 있어, 충돌 난 별도 `agent/external_cli_fallback.py` 계열은 이식하지 않는다.
 
 ## 이번 세션에서 한 일
-- `gateway/run.py`
-  - `_is_gateway_health_probe()` 추가: standalone smoke-test 단어만 감지.
-  - `_format_gateway_health_probe_response()` 추가: inbound/final reply path active/code tests not run 안내.
-  - auth check 이후, `/update` prompt 처리 전에 외부 standalone probe를 intercept.
-  - `OpenClaw 테스트 실행` 같은 명시적 긴 요청은 agent path로 유지.
-- `tests/gateway/test_unknown_command.py`
-  - bare `테스트`가 agent로 새지 않고 OK health response를 반환하는 회귀 테스트 추가.
-  - 명시적 OpenClaw test 요청은 agent path로 가는 회귀 테스트 추가.
-- 운영 정리
-  - stale `/tmp/wire_arbiter.py` 종료.
-  - `hermes-gateway` 재시작 및 상태 확인.
-  - OpenClaw bridge smoke와 targeted OpenClaw tests로 브릿지 범위를 재확인.
+- `agent/context_compressor.py`
+  - summary 생성 실패 시 static marker를 넣고 중간 turn을 드롭하던 동작을 중단.
+  - 원본 메시지를 그대로 반환해 compression을 보류.
+  - `_last_summary_fallback_used=True`, `_last_summary_dropped_count=0`으로 기록.
+  - 실패한 compression은 `compression_count`를 증가시키지 않음.
+  - provider 미설정 로그도 “드롭”이 아니라 “원본 보존/압축 보류”로 수정.
+- `tests/agent/test_context_compressor.py`
+  - no-client/no-summary 상황에서 원본 보존을 기대하도록 테스트 갱신.
+  - summary가 실제 생성되는 경우에만 `compression_count`가 증가하는지 검증.
 
-## 검증 결과
-- Hermes:
-  - `compileall gateway/run.py tests/gateway/test_unknown_command.py` 통과.
-  - `tests/gateway/test_unknown_command.py`: 13 passed.
-  - `tests/gateway/test_unknown_command.py tests/gateway/test_run_progress_topics.py`: 41 passed.
-  - `scripts/openclaw_bridge_smoke.py`: 5 PASS.
-  - `git diff --check`: 통과.
-- 운영:
-  - `hermes-gateway`: active/running, PID `4124976`, `NRestarts=0`, `ExecMainStatus=0`.
-  - stale `wire_arbiter.py` 종료 확인.
-- OpenClaw bridge targeted checks:
-  - outbound metadata: 3 passed.
-  - outbound message/deliver: 50 passed.
-  - gateway send: 36 passed.
-- OpenClaw 전체 `check:changed`는 실패. 브릿지 문제가 아니라 기존 type/dependency 문제:
-  - `supportsLongCacheRetention` compat 타입 필드 누락.
-  - `@mariozechner/pi-ai` export 불일치.
-  - `@vincentkoc/qrcode-tui` 모듈/타입 누락.
+## 검증 상태
+- `tests/agent/test_context_compressor.py`: 50 passed.
+- 남은 검증: Codex response/CLI busy focused tests, py_compile, diff check, 독립 리뷰.
 
-## 알려진 이슈
-- OpenClaw `/home/sudol/openclaw`는 branch `fix/codex-cli-bootstrap-only`, HEAD `6269b6fc59`이며 macOS UI/설정 화면 17개 파일의 미커밋 변경이 남아 있다.
-- A8에 CPU 0%의 오래된 `systemctl --user start hermes-gateway; exec sleep infinity` shell 래퍼 2개가 남아 있다. 운영상 치명적이지 않아 이번 정리에서는 보존했다.
-- 실제 Telegram `테스트` 수신 confirmation은 사용자가 새 메시지를 보내면 로그와 수신 화면으로 확인한다.
-
-## 다음에 할 일
-1. 사용자가 Telegram에 `테스트`를 보내면 `Hermes gateway OK` 응답 수신을 확인한다.
-2. OpenClaw 전체 typecheck 실패를 별도 수정한다.
-3. OpenClaw 미커밋 UI 변경의 소유/의도 확인 후 별도 저장 또는 정리한다.
+## 알려진 이슈 / 주의
+- 기본 worktree `/home/sudol/.hermes/hermes-agent`는 `main...fork/main [ahead 1115, behind 32]`이며 unrelated `ui-tui/package-lock.json`, `mobile/`가 남아 있다.
+- OpenClaw repo의 macOS Swift UI dirty 파일은 이번 작업과 무관하므로 건드리지 않는다.
+- 서비스 재시작, 시스템 재부팅, G3 배포는 하지 않았다.

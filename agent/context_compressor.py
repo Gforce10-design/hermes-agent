@@ -295,6 +295,8 @@ class ContextCompressor(ContextEngine):
         self._context_probe_persistable = False
         self._previous_summary = None
         self._last_summary_error = None
+        self._last_summary_dropped_count = 0
+        self._last_summary_fallback_used = False
         self._last_compression_savings_pct = 100.0
         self._ineffective_compression_count = 0
 
@@ -391,6 +393,8 @@ class ContextCompressor(ContextEngine):
         self._ineffective_compression_count: int = 0
         self._summary_failure_cooldown_until: float = 0.0
         self._last_summary_error: Optional[str] = None
+        self._last_summary_dropped_count: int = 0
+        self._last_summary_fallback_used: bool = False
 
     def update_from_response(self, usage: Dict[str, Any]):
         """Update tracked token usage from API response."""
@@ -657,9 +661,9 @@ class ContextCompressor(ContextEngine):
                 related to this topic and is more aggressive about compressing
                 everything else.  Inspired by Claude Code's ``/compact``.
 
-        Returns None if all attempts fail — the caller should drop
-        the middle turns without a summary rather than inject a useless
-        placeholder.
+        Returns None if all attempts fail. The caller must defer compression
+        and preserve the original turns rather than replacing them with a
+        generic marker or dropping them silently.
         """
         now = time.monotonic()
         if now < self._summary_failure_cooldown_until:
@@ -821,8 +825,8 @@ The user has requested that this compaction PRIORITISE preserving all informatio
             self._summary_failure_cooldown_until = time.monotonic() + _SUMMARY_FAILURE_COOLDOWN_SECONDS
             self._last_summary_error = "no auxiliary LLM provider configured"
             logging.warning("Context compression: no provider available for "
-                            "summary. Middle turns will be dropped without summary "
-                            "for %d seconds.",
+                            "summary. Compression will be deferred to preserve "
+                            "the original turns for %d seconds.",
                             _SUMMARY_FAILURE_COOLDOWN_SECONDS)
             return None
         except Exception as e:
@@ -1145,6 +1149,9 @@ The user has requested that this compaction PRIORITISE preserving all informatio
                 related to this topic and be more aggressive about compressing
                 everything else.  Inspired by Claude Code's ``/compact``.
         """
+        original_messages = [m.copy() if isinstance(m, dict) else m for m in messages]
+        self._last_summary_dropped_count = 0
+        self._last_summary_fallback_used = False
         n_messages = len(messages)
         # Only need head + 3 tail messages minimum (token budget decides the real tail size)
         _min_for_compress = self.protect_first_n + 3 + 1
@@ -1217,19 +1224,16 @@ The user has requested that this compaction PRIORITISE preserving all informatio
                     )
             compressed.append(msg)
 
-        # If LLM summary failed, insert a static fallback so the model
-        # knows context was lost rather than silently dropping everything.
+        # If LLM summary failed, abort compression rather than replacing real
+        # conversation turns with a generic marker.  The marker made loss
+        # visible, but it still dropped the user's prior work.  Defer
+        # compression so a later turn/provider can retry with the full context.
         if not summary:
             if not self.quiet_mode:
-                logger.warning("Summary generation failed — inserting static fallback context marker")
-            n_dropped = compress_end - compress_start
-            summary = (
-                f"{SUMMARY_PREFIX}\n"
-                f"Summary generation was unavailable. {n_dropped} conversation turns were "
-                f"removed to free context space but could not be summarized. The removed "
-                f"turns contained earlier work in this session. Continue based on the "
-                f"recent messages below and the current state of any files or resources."
-            )
+                logger.warning("Summary generation failed — preserving original messages and deferring compression")
+            self._last_summary_dropped_count = 0
+            self._last_summary_fallback_used = True
+            return original_messages
 
         _merge_summary_into_tail = False
         last_head_role = messages[compress_start - 1].get("role", "user") if compress_start > 0 else "user"

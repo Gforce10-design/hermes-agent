@@ -8220,7 +8220,11 @@ class AIAgent:
                 messages.pop()
 
     def _compress_context(self, messages: list, system_message: str, *, approx_tokens: int = None, task_id: str = "default", focus_topic: str = None) -> tuple:
-        """Compress conversation context and split the session in SQLite.
+        """Compress conversation context and split the session in SQLite on success.
+
+        If summary generation fails and the compressor defers compression to
+        preserve the original messages, this returns the original context and
+        does not split the session.
 
         Args:
             focus_topic: Optional focus string for guided compression — the
@@ -8255,12 +8259,25 @@ class AIAgent:
             compressed = self.context_compressor.compress(messages, current_tokens=approx_tokens)
 
         summary_error = getattr(self.context_compressor, "_last_summary_error", None)
+        compression_deferred = bool(getattr(self.context_compressor, "_last_summary_fallback_used", False))
+        if compression_deferred:
+            if summary_error and getattr(self, "_last_compression_summary_warning", None) != summary_error:
+                self._last_compression_summary_warning = summary_error
+                self._emit_warning(
+                    f"⚠ Compression summary failed: {summary_error}. "
+                    "Preserved original context; compression deferred."
+                )
+            logger.warning(
+                "context compression deferred: session=%s messages=%d preserved summary_error=%r",
+                self.session_id or "none", len(messages), summary_error,
+            )
+            return messages, (self._cached_system_prompt or self._build_system_prompt(system_message))
         if summary_error:
             if getattr(self, "_last_compression_summary_warning", None) != summary_error:
                 self._last_compression_summary_warning = summary_error
                 self._emit_warning(
                     f"⚠ Compression summary failed: {summary_error}. "
-                    "Inserted a fallback context marker."
+                    "Compression deferred."
                 )
 
         todo_snapshot = self._todo_store.format_for_injection()

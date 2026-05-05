@@ -29,6 +29,9 @@ def _make_agent_with_engine(engine):
     agent._cached_system_prompt = None
     agent.log_prefix = ""
     agent._vprint = lambda *a, **kw: None
+    agent._warnings = []
+    agent._emit_warning = lambda msg: agent._warnings.append(msg)
+    agent._last_compression_summary_warning = None
     agent._last_flushed_db_idx = 0
     # Stub the few AIAgent methods _compress_context uses.
     agent.flush_memories = lambda *a, **kw: None
@@ -74,3 +77,40 @@ def test_compress_context_falls_back_when_engine_rejects_focus_topic():
     assert captured_kwargs == [{"current_tokens": 100}]
     # Silence unused-var warning on agent.
     assert agent.context_compressor is engine
+
+
+def test_compress_context_deferred_summary_failure_does_not_split_session():
+    class _DeferredCompressionEngine:
+        compression_count = 0
+        _last_summary_error = "no auxiliary LLM provider configured"
+        _last_summary_fallback_used = True
+        _last_summary_dropped_count = 0
+
+        def compress(self, messages, current_tokens=None, focus_topic=None):
+            return messages
+
+    engine = _DeferredCompressionEngine()
+    agent = _make_agent_with_engine(engine)
+    agent._session_db = MagicMock()
+    messages = [
+        {"role": "user", "content": "one"},
+        {"role": "assistant", "content": "two"},
+        {"role": "user", "content": "three"},
+    ]
+
+    compressed, system_prompt = agent._compress_context(
+        messages,
+        "system prompt",
+        approx_tokens=100,
+        task_id="test",
+    )
+
+    assert compressed is messages
+    assert system_prompt == "new-system-prompt"
+    assert agent._session_db.end_session.call_count == 0
+    assert agent._session_db.create_session.call_count == 0
+    assert agent._session_db.update_system_prompt.call_count == 0
+    assert agent._warnings == [
+        "⚠ Compression summary failed: no auxiliary LLM provider configured. "
+        "Preserved original context; compression deferred."
+    ]

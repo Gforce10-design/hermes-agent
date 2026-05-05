@@ -64,21 +64,26 @@ class TestCompress:
         result = compressor.compress(msgs)
         assert result == msgs
 
-    def test_truncation_fallback_no_client(self, compressor):
-        # compressor has client=None, so should use truncation fallback
+    def test_summary_unavailable_preserves_messages(self, compressor):
+        # compressor has client=None, so summary generation is unavailable.
+        # Compression must defer instead of dropping real messages.
         msgs = [{"role": "system", "content": "System prompt"}] + self._make_messages(10)
         result = compressor.compress(msgs)
-        assert len(result) < len(msgs)
-        # Should keep system message and last N
-        assert result[0]["role"] == "system"
-        assert compressor.compression_count == 1
+        assert result == msgs
+        assert compressor.compression_count == 0
+        assert compressor._last_summary_fallback_used is True
+        assert compressor._last_summary_dropped_count == 0
 
     def test_compression_increments_count(self, compressor):
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = "[CONTEXT SUMMARY]: stuff happened"
         msgs = self._make_messages(10)
-        compressor.compress(msgs)
-        assert compressor.compression_count == 1
-        compressor.compress(msgs)
-        assert compressor.compression_count == 2
+        with patch("agent.context_compressor.call_llm", return_value=mock_response):
+            compressor.compress(msgs)
+            assert compressor.compression_count == 1
+            compressor.compress(msgs)
+            assert compressor.compression_count == 2
 
     def test_protects_first_and_last(self, compressor):
         msgs = self._make_messages(10)
@@ -129,7 +134,23 @@ class TestGenerateSummaryNoneContent:
             for i in range(10)
         ]
         result = c.compress(msgs)
-        assert len(result) < len(msgs)
+        assert result == msgs
+        assert c.compression_count == 0
+        assert c._last_summary_fallback_used is True
+
+    def test_summary_failure_does_not_trip_anti_thrashing(self):
+        with patch("agent.context_compressor.get_model_context_length", return_value=100000):
+            c = ContextCompressor(model="test", quiet_mode=True, protect_first_n=2, protect_last_n=2)
+
+        msgs = [{"role": "user" if i % 2 == 0 else "assistant", "content": f"msg {i}"} for i in range(10)]
+        c.last_prompt_tokens = c.threshold_tokens + 1
+
+        c.compress(msgs)
+        c.compress(msgs)
+
+        assert c._last_summary_fallback_used is True
+        assert c._ineffective_compression_count == 0
+        assert c.should_compress() is True
 
 
 class TestNonStringContent:
