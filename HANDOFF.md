@@ -1,7 +1,7 @@
 # hermes-agent HANDOFF
 
 ## 현재 상태
-- 브랜치: `main` (기본 작업트리), `main...fork/main [ahead 1115, behind 33]` 상태라 직접 동기화하지 않음.
+- 브랜치: `main` (기본 작업트리), `main...fork/main [ahead 1116, behind 33]` 상태라 직접 동기화하지 않음.
 - Hermes clean worktree: `/home/sudol/.hermes/hermes-agent-sync-codex-stuck-20260505`.
 - clean worktree HEAD: `03877bde6 fix: preserve context when compression summary fails`, `fork/main`과 일치.
 - OpenClaw gateway: systemd enabled/running, `127.0.0.1:18789`, `auth.mode=token`, health OK.
