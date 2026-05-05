@@ -1,5 +1,25 @@
 # hermes-agent WORKLOG
 
+
+## [2026-05-06 02:10 KST] implement | OpenClaw worker trigger bridge v1
+
+### 작업 내용
+- `openclaw-bridge` bundled plugin에 `openclaw_worker_trigger` 도구를 추가했다.
+- `dry_run=true`는 execute 값과 무관하게 validate-only로 반환하고 subprocess를 실행하지 않는다.
+- 실행 경로는 `execute=true`, `approval_state=approved_local_contract`, non-empty `trace_id`, exact allowlisted argv `['worker','trigger','loop']` 조건을 모두 요구한다.
+- `openclaw_cli` read-only allowlist와 worker trigger allowlist를 분리해 우회 실행을 막았다.
+
+### 검증
+- `tests/plugins/test_openclaw_bridge_plugin.py`: `14 passed`.
+- `py_compile`: `plugins/openclaw-bridge/__init__.py`, `plugins/openclaw-bridge/tools.py`, bridge test 통과.
+- `git diff --check` 통과.
+- 독립 리뷰: PASS.
+
+### 안전 경계
+- 서비스 재시작, G3 배포, DB/secrets/webhook/OAuth 변경 없음.
+- unrestricted OpenClaw shell execution 없음.
+
+---
 ## [2026-05-06 00:01 KST] implement | Telegram DM topic auto session registration
 
 ### 작업 내용

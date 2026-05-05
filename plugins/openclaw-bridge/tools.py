@@ -33,6 +33,11 @@ ALLOWED_OPENCLAW_ARGV: tuple[tuple[str, ...], ...] = (
     ("doctor", "--help"),
 )
 
+ALLOWED_WORKER_TRIGGER_ARGV: tuple[tuple[str, ...], ...] = (
+    ("worker", "trigger", "loop"),
+)
+APPROVED_LOCAL_CONTRACT = "approved_local_contract"
+
 
 def _json(data: dict[str, Any]) -> str:
     return json.dumps(data, ensure_ascii=False)
@@ -174,11 +179,14 @@ def _normalise_argv(value: Any) -> tuple[str, ...] | None:
     return tuple(argv)
 
 
-def _run_openclaw(argv: tuple[str, ...]) -> dict[str, Any]:
+def _run_openclaw(
+    argv: tuple[str, ...],
+    allowed_argv: tuple[tuple[str, ...], ...] = ALLOWED_OPENCLAW_ARGV,
+) -> dict[str, Any]:
     trace_id = f"openclaw:{int(time.time() * 1000)}"
     started = time.monotonic()
 
-    if argv not in ALLOWED_OPENCLAW_ARGV:
+    if argv not in allowed_argv:
         return {
             "success": False,
             "trace_id": trace_id,
@@ -253,6 +261,42 @@ OPENCLAW_CLI_SCHEMA = {
     },
 }
 
+OPENCLAW_WORKER_TRIGGER_SCHEMA = {
+    "description": (
+        "Validate or execute the exact allowlisted OpenClaw worker trigger loop. "
+        "dry_run=true only validates. execute=true requires approval_state "
+        "approved_local_contract and a non-empty trace_id."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "argv": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Must exactly equal ['worker', 'trigger', 'loop'].",
+            },
+            "dry_run": {
+                "type": "boolean",
+                "description": "Validate only; never starts the worker trigger subprocess.",
+            },
+            "execute": {
+                "type": "boolean",
+                "description": "Execute only when approval_state and trace_id satisfy the local contract.",
+            },
+            "approval_state": {
+                "type": "string",
+                "description": "Must be approved_local_contract when execute=true.",
+            },
+            "trace_id": {
+                "type": "string",
+                "description": "Required non-empty caller trace id when execute=true.",
+            },
+        },
+        "required": ["argv"],
+        "additionalProperties": False,
+    },
+}
+
 
 def handle_openclaw_status(args: dict[str, Any] | None = None, **_: Any) -> str:
     return _json(_run_openclaw(("gateway", "status")))
@@ -269,3 +313,93 @@ def handle_openclaw_cli(args: dict[str, Any] | None = None, **_: Any) -> str:
             }
         )
     return _json(_run_openclaw(argv))
+
+
+def handle_openclaw_worker_trigger(args: dict[str, Any] | None = None, **_: Any) -> str:
+    payload = args or {}
+    argv = _normalise_argv(payload.get("argv"))
+    if argv is None:
+        return _json(
+            {
+                "success": False,
+                "accepted": False,
+                "allowed": False,
+                "error": "argv must be a JSON array of non-empty strings, not a shell command string.",
+            }
+        )
+    if argv not in ALLOWED_WORKER_TRIGGER_ARGV:
+        return _json(
+            {
+                "success": False,
+                "accepted": False,
+                "allowed": False,
+                "argv": list(argv),
+                "error": "OpenClaw worker trigger argv is not in the exact allowlist.",
+            }
+        )
+
+    dry_run = payload.get("dry_run") is True
+    execute = payload.get("execute") is True
+    if dry_run:
+        return _json(
+            {
+                "success": True,
+                "accepted": True,
+                "allowed": True,
+                "dry_run": True,
+                "execute": False,
+                "argv": list(argv),
+                "message": "OpenClaw worker trigger request validated; no subprocess executed.",
+            }
+        )
+
+    if not execute:
+        return _json(
+            {
+                "success": False,
+                "accepted": False,
+                "allowed": True,
+                "dry_run": dry_run,
+                "execute": False,
+                "argv": list(argv),
+                "error": "Set dry_run=true for validate-only or execute=true with local approval to run.",
+            }
+        )
+
+    approval_state = payload.get("approval_state")
+    trace_id = payload.get("trace_id")
+    if approval_state != APPROVED_LOCAL_CONTRACT:
+        return _json(
+            {
+                "success": False,
+                "accepted": False,
+                "allowed": True,
+                "dry_run": dry_run,
+                "execute": True,
+                "argv": list(argv),
+                "error": "execute=true requires approval_state == approved_local_contract.",
+            }
+        )
+    if not isinstance(trace_id, str) or not trace_id.strip():
+        return _json(
+            {
+                "success": False,
+                "accepted": False,
+                "allowed": True,
+                "dry_run": dry_run,
+                "execute": True,
+                "argv": list(argv),
+                "error": "execute=true requires a non-empty trace_id.",
+            }
+        )
+
+    result = _run_openclaw(argv, ALLOWED_WORKER_TRIGGER_ARGV)
+    result.update(
+        {
+            "accepted": True,
+            "dry_run": False,
+            "execute": True,
+            "trace_id": trace_id,
+        }
+    )
+    return _json(result)

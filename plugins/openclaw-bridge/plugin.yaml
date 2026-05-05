@@ -7,4 +7,5 @@ provides_hooks: []
 provides_tools:
   - openclaw_status
   - openclaw_cli
+  - openclaw_worker_trigger
 requires_env: []

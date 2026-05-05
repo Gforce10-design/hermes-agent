@@ -2,9 +2,9 @@
 
 ## 현재 상태
 - 브랜치: `main`.
-- 최신 완료 작업: Telegram DM topic auto session registration 구현/검증 완료.
+- 최신 완료 작업: OpenClaw worker trigger bridge v1 구현/검증 완료.
 - Hermes gateway live config에는 `Dr.에르메스` 수동 DM topic이 이미 생성되어 있고 `thread_id=51117`이다.
-- OpenClaw bridge 작업은 커밋 `8ad64254e feat: add read-only OpenClaw bridge tools`로 저장/푸시 완료되어 있다.
+- OpenClaw bridge는 read-only 도구에 더해 `openclaw_worker_trigger` v1까지 구현/검증됐다. 저장 커밋은 본 세션 커밋 참조.
 
 ## 마지막 세션 작업
 - `gateway/platforms/telegram.py`에 unknown Telegram DM topic runtime auto-register를 추가했다.
@@ -32,5 +32,5 @@
 
 ## 알려진 이슈 / 주의
 - 서비스 재시작은 Hermes gateway 프로세스 재시작이며 시스템 재부팅이 아니다.
-- OpenClaw bridge는 read-only toolset이며 full worker trigger loop는 아직 별도 범위다.
+- OpenClaw bridge는 worker trigger v1까지 포함하지만 live dispatch/서비스 재시작/비제한 shell은 여전히 차단된다.
 - GitHub 토큰/Telegram 토큰/비밀값은 저장하지 않았다.

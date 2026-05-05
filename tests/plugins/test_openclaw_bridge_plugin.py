@@ -12,7 +12,7 @@ import pytest
 from hermes_cli.plugins import PluginManifest, PluginManager
 from tools.registry import registry
 
-TOOL_NAMES = ("openclaw_status", "openclaw_cli")
+TOOL_NAMES = ("openclaw_status", "openclaw_cli", "openclaw_worker_trigger")
 
 
 @pytest.fixture(autouse=True)
@@ -68,6 +68,106 @@ def test_manifest_lists_provided_tools():
 
     assert "openclaw_status" in manifest_text
     assert "openclaw_cli" in manifest_text
+    assert "openclaw_worker_trigger" in manifest_text
+
+
+def test_openclaw_worker_trigger_dry_run_validates_without_executing(monkeypatch, loaded_plugin):
+    _loaded, tools_mod = loaded_plugin
+    calls = []
+
+    monkeypatch.setattr(tools_mod, "_run_openclaw", lambda argv: calls.append(argv))
+
+    result = _decode(
+        tools_mod.handle_openclaw_worker_trigger(
+            {
+                "argv": ["worker", "trigger", "loop"],
+                "dry_run": True,
+                "execute": False,
+            }
+        )
+    )
+
+    assert result["success"] is True
+    assert result["accepted"] is True
+    assert result["dry_run"] is True
+    assert result["allowed"] is True
+    assert result["argv"] == ["worker", "trigger", "loop"]
+    assert calls == []
+
+
+def test_openclaw_worker_trigger_execute_requires_local_contract_and_trace(monkeypatch, loaded_plugin):
+    _loaded, tools_mod = loaded_plugin
+    calls = []
+
+    def fake_run(argv, allowed_argv=None):
+        calls.append(argv)
+        return {"success": True, "argv": list(argv), "returncode": 0}
+
+    monkeypatch.setattr(tools_mod, "_run_openclaw", fake_run)
+
+    missing_trace = _decode(
+        tools_mod.handle_openclaw_worker_trigger(
+            {
+                "argv": ["worker", "trigger", "loop"],
+                "execute": True,
+                "approval_state": "approved_local_contract",
+            }
+        )
+    )
+    wrong_approval = _decode(
+        tools_mod.handle_openclaw_worker_trigger(
+            {
+                "argv": ["worker", "trigger", "loop"],
+                "execute": True,
+                "approval_state": "approved_remote_contract",
+                "trace_id": "trace-1",
+            }
+        )
+    )
+    executed = _decode(
+        tools_mod.handle_openclaw_worker_trigger(
+            {
+                "argv": ["worker", "trigger", "loop"],
+                "execute": True,
+                "approval_state": "approved_local_contract",
+                "trace_id": "trace-2",
+            }
+        )
+    )
+
+    assert missing_trace["success"] is False
+    assert missing_trace["accepted"] is False
+    assert wrong_approval["success"] is False
+    assert wrong_approval["accepted"] is False
+    assert executed["success"] is True
+    assert executed["accepted"] is True
+    assert executed["trace_id"] == "trace-2"
+    assert calls == [("worker", "trigger", "loop")]
+
+
+def test_openclaw_worker_trigger_rejects_shell_strings_and_arbitrary_argv(monkeypatch, loaded_plugin):
+    _loaded, tools_mod = loaded_plugin
+    calls = []
+
+    monkeypatch.setattr(tools_mod, "_run_openclaw", lambda argv: calls.append(argv))
+
+    shell_string = _decode(
+        tools_mod.handle_openclaw_worker_trigger(
+            {"argv": "worker trigger loop", "dry_run": True}
+        )
+    )
+    arbitrary_argv = _decode(
+        tools_mod.handle_openclaw_worker_trigger(
+            {"argv": ["worker", "trigger", "loop", "--force"], "dry_run": True}
+        )
+    )
+
+    assert shell_string["success"] is False
+    assert shell_string["allowed"] is False
+    assert "JSON array" in shell_string["error"]
+    assert arbitrary_argv["success"] is False
+    assert arbitrary_argv["allowed"] is False
+    assert calls == []
 
 
 def test_check_fn_follows_resolved_binary(monkeypatch, loaded_plugin):
@@ -196,6 +296,35 @@ def test_bounded_subprocess_times_out_when_descendant_holds_pipe(tmp_path, loade
     assert elapsed < 2.0
     assert result["timed_out"] is True
     assert not survivor_marker.exists()
+
+
+def test_openclaw_worker_trigger_dry_run_never_executes_even_with_execute(monkeypatch, loaded_plugin):
+    _loaded, tools_mod = loaded_plugin
+    calls = []
+
+    def fake_run(argv, allowed_argv=tools_mod.ALLOWED_OPENCLAW_ARGV):
+        calls.append((argv, allowed_argv))
+        return {"success": True, "argv": list(argv)}
+
+    monkeypatch.setattr(tools_mod, "_run_openclaw", fake_run)
+
+    result = _decode(
+        tools_mod.handle_openclaw_worker_trigger(
+            {
+                "argv": ["worker", "trigger", "loop"],
+                "dry_run": True,
+                "execute": True,
+                "approval_state": "approved_local_contract",
+                "trace_id": "trace-123",
+            }
+        )
+    )
+
+    assert result["success"] is True
+    assert result["accepted"] is True
+    assert result["dry_run"] is True
+    assert result["execute"] is False
+    assert calls == []
 
 
 def test_openclaw_status_uses_fixed_gateway_status(monkeypatch, loaded_plugin):
