@@ -1,5 +1,21 @@
 # hermes-agent WORKLOG
 
+## 2026-05-06 — AlphaNexus Routing Matrix / Golden Packets v0
+
+### 작업 내용
+- Domain Routing Matrix v0 작성: 사용자의 “알파” 요청을 도메인/역할/실행팀/승인 게이트로 라우팅하는 기준.
+- Golden Mission Packet Examples v0 작성: 비서실, 금융·투자, AlphaMate/G3, Hermes, OpenClaw, AI R&D, 문서·콘텐츠, 비용 발생 작업 예시.
+
+### 산출물
+- `hermes-2026-05-06-alpha-nexus-domain-routing-matrix-v0.md`
+- `hermes-2026-05-06-alpha-nexus-golden-mission-packets-v0.md`
+
+### 검증
+- line count와 핵심 marker 확인.
+- 비용/개인정보/운영 변경/외부 발송 게이트 포함 확인.
+- 코드/API/UI/배포/G3/DB/secrets/auth/cron/wiki 변경 없음.
+
+
 ## 2026-05-06 — AlphaCommand IA v0 / Mission Packet Contract v0
 
 ### 작업 내용
