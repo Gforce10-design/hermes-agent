@@ -1,5 +1,20 @@
 # hermes-agent WORKLOG
 
+## 2026-05-06 — AlphaCommand v1 OpenClaw evidence / autonomous approval packet
+
+### 작업 내용
+- OpenClaw evidence 레인을 실제로 사용해 tasks audit, skills check, plugins help를 수집했다.
+- AlphaCommand UI Slice Plan v1과 implementation approval packet draft를 작성했다.
+- 독립 리뷰 2건으로 read-only 범위, 고위험 게이트, clean worktree 충돌 위험을 확인했다.
+- 사용자 수면/부재 중 단순 승인 자율모드 제한 문구를 approval packet에 보강했다.
+
+### 검증
+- OpenClaw tasks audit: stale/lost/error 0.
+- OpenClaw skills check: total 53, eligible 9, missing requirements 0.
+- Clean worktree/Dashboard branch 상태 clean, Codex 브랜치 대비 충돌 위험 낮음.
+- 코드/API/UI/배포/G3/DB/secrets/auth/cron/wiki 변경 없음.
+
+
 ## 2026-05-06 — AlphaCommand 야간 자율 설계 진행
 
 ### 작업 내용
