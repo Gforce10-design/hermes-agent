@@ -1,5 +1,17 @@
 # hermes-agent WORKLOG
 
+## 2026-05-06 — v3 AI R&D private/paid source guardrail
+
+### 작업 내용
+- 사용자 의견 반영: 비공개방/유료자료도 정당한 접근 권한이 있고 위법·약관위반·우회가 아닌 경우에는 AI R&D 참고 자료로 허용.
+- 금지 범위 명시: paywall 우회, 무단 크롤링, 계정 공유, 토큰/쿠키 탈취, 비공개 자료 재배포, 개인정보 수집.
+- 원문 저장 대신 출처·권한 상태·핵심 요약·AlphaMate 적용 판단만 남기도록 보강.
+
+### 검증
+- keyword check: PASS
+- docs-only 변경. 서비스 재시작/시스템 재부팅/G3 운영/DB·secrets·auth·wiki apply 없음.
+
+
 ## 2026-05-06 — v3 AI R&D community collection channels
 
 ### 작업 내용
