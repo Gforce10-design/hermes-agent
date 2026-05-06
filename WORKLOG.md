@@ -1,5 +1,20 @@
 # hermes-agent WORKLOG
 
+## 2026-05-06 — Alpha Workflow v3 contract draft
+
+### 작업 내용
+- Enterprise AI Organization v3 설계를 실행 계약으로 변환.
+- `/work → /do → Packet → Evidence → Approval Inbox → Ledger → Verify → Save-Sync` 계약 작성.
+- RACI, routing matrix, mission packet schema, AI R&D Trend-to-Upgrade, 합법적 비표준 수집 경로, golden mission cases, approval boundary 포함.
+
+### 산출물
+- `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-06-alpha-workflow-v3-contract.md`
+
+### 검증
+- keyword check: PASS
+- docs-only 변경. 서비스 재시작/시스템 재부팅/G3 운영/DB·secrets·auth·wiki apply/cron 생성 없음.
+
+
 ## 2026-05-06 — v3 AI R&D lawful nonstandard source paths
 
 ### 작업 내용
