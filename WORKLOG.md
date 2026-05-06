@@ -1,5 +1,19 @@
 # hermes-agent WORKLOG
 
+## 2026-05-06 — Alpha Workflow v3 integrated implementation plan
+
+### 작업 내용
+- 사용자 정정 반영: 1/2/3 선택지가 아니라 Golden Mission Packet, AI R&D Brief/Trend Candidate Card, Control Tower UI/API를 하나의 통합 구현 계획으로 묶음.
+- docs/schema/fixtures → AI R&D cards → Control Tower UI/API → runtime implementation → automation 순서로 계획화.
+
+### 산출물
+- `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-06-alpha-workflow-v3-integrated-implementation-plan.md`
+
+### 검증
+- keyword check: PASS
+- docs-only 변경. 코드/API/UI/cron/job/gateway/service/G3/DB/secrets/auth/wiki 변경 없음.
+
+
 ## 2026-05-06 — Alpha Workflow v3 contract draft
 
 ### 작업 내용
