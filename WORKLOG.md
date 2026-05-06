@@ -1,5 +1,22 @@
 # hermes-agent WORKLOG
 
+## 2026-05-06 — Enterprise AI Organization v3 deep-design draft
+
+### 작업 내용
+- v2 문서를 최종본이 아닌 예비 설계안으로 정정하고, v3 deep-design 초안 작성.
+- 원천/커스텀 스킬 기반으로 `/work → /do → Packet → Ledger → Save-Sync` 체계를 재구성.
+- gstack Office Hours/CEO/Eng Review, Superpowers subagent-driven-development, Pocock 6 skills, capability surface 원칙을 통합.
+- 독립 리뷰 2건 실행 후 RACI, routing matrix, mission packet schema, approval gate matrix, golden mission examples, 한국어 사용자 플로우를 보강.
+
+### 산출물
+- `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-06-enterprise-ai-organization-v3-deep-design-draft.md`
+
+### 검증
+- required keyword check: PASS
+- 리뷰 결과: spec 부분 PASS → 보강 완료, engineering conditional pass → blocker 보강 완료.
+- docs-only 작업. gateway/service restart, system reboot, G3 운영 변경, DB/secrets/auth/wiki apply 없음.
+
+
 ## 2026-05-06 — OpenClaw fork PR + gh auth save
 
 ### 작업 내용

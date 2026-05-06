@@ -1,41 +1,25 @@
-# Hermes Agent Handoff — 2026-05-06 OpenClaw fork PR baseline
+# Hermes Agent Handoff — 2026-05-06 Enterprise AI Organization v3 draft
 
 ## Current state
-- Machine: A8Max / A8 WSL.
-- Hermes repo: `/home/sudol/.hermes/hermes-agent`, branch `feat/alpha-workflow-r0-r3-ai-org-20260506`.
-- OpenClaw repo: `/home/sudol/openclaw`, branch `feat/worker-trigger-loop-local-contract-20260506`, commit `45b2af4e8f`.
-- GitHub CLI: installed and authenticated as `Gforce10-design` with SSH git protocol.
+- Machine: A8Max / A8 WSL
+- Repo: `/home/sudol/.hermes/hermes-agent`
+- Branch: `feat/alpha-workflow-r0-r3-ai-org-20260506`
+- This handoff is included in the next save commit.
 
 ## Last work
-- Installed and authenticated `gh` after Telegram/device-code flow.
-- Created fork PR for the operational OpenClaw worker-trigger baseline:
-  - https://github.com/Gforce10-design/openclaw/pull/1
-- Upstream PR remains open but non-blocking:
-  - https://github.com/openclaw/openclaw/pull/78115
-- Decision: for Hermes-specific OpenClaw local runtime contracts, fork-first operation is preferred; upstream is optional proposal/record.
-- Obsidian raw/dev save note:
-  - `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-06-openclaw-fork-pr-gh-save.md`
+- Gateway restart completed earlier and verified active.
+- Started Enterprise AI Organization v3 deep-design.
+- Created docs-only v3 draft: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-06-enterprise-ai-organization-v3-deep-design-draft.md`.
+- Loaded/used relevant workflow sources: tri-tool DDD, AlphaMate Control Tower, Superpowers subagent-driven-development, Obsidian, gstack Office Hours/Eng/CEO review source files, Codex work-router/save rules.
+- Ran two independent delegate reviews; patched the draft with RACI, `/work` routing matrix, `/do` packet schema, approval gate matrix, golden mission examples, and Korean user flow.
 
 ## Verification
-- `gh auth status` confirms `Gforce10-design` login.
-- `gh pr view 1 --repo Gforce10-design/openclaw` shows PR open, mergeable, not draft; CI started/queued.
-- OpenClaw local branch is pushed to fork and tracks origin branch.
-- OpenClaw repo root scratch PR markdown files were moved to Windows Hermes workspace artifacts.
+- Required keyword check: PASS.
+- Docs-only: no code/config/runtime mutation.
+- No gateway/service restart after this draft, no system reboot, no G3 operation, no DB/secrets/auth/wiki apply.
 
-## Cross-runtime / machine sync
-- Source interface: Telegram DM.
-- Runtime surfaces updated: Hermes WORKLOG/HANDOFF, Obsidian raw/dev, durable memory, `github-auth` skill, GitHub fork PR.
-- Fork PR #1 watcher cron: `16a61433a21d`, every 15m, 96 runs, read-only.
-- A8: current authoritative runtime.
-- Desktop/G3: pull-needed only if they need this OpenClaw fork branch; no production service restart/deploy was performed.
-
-## Next actions
-- Watch fork PR #1 CI to completion.
-- If fork PR CI is green, merge or pin/use `Gforce10-design/openclaw` fork branch for Hermes/OpenClaw operations.
-- Keep upstream PR #78115 as optional maintainer review; do not spend more reshaping effort unless upstream maintainer requests specific changes.
-
-## Boundaries
-- No system reboot.
-- No G3 production restart/deploy/sync.
-- No DB/schema/data mutation.
-- Hermes gateway service restart was not performed in this save.
+## Next tasks
+1. Ask CEO question round for v3 priorities.
+2. Convert v3 draft into v3 alpha workflow contract.
+3. After user direction, prepare implementation plan for first approved slice.
+4. Save after each phase with WORKLOG/HANDOFF/raw-dev/git push.
