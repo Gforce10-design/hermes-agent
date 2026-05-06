@@ -1,5 +1,27 @@
 # hermes-agent WORKLOG
 
+## 2026-05-06 — Control Tower Enterprise AI 사옥 표면 구현 저장
+
+### 작업 내용
+- Codex Control Tower baseline(parent `1888db1`, Dashboard `9851f8f`) 위에 clean worktree로 후속 구현.
+- Dashboard API/UI에 Enterprise AI 사옥 read-only 표면 추가.
+- AlphaMate Parent/Dashboard WORKLOG/HANDOFF와 Obsidian raw/dev 저장.
+
+### 커밋
+- Dashboard: `0f61b04 feat: add Control Tower enterprise building surface`
+- Parent: `fe812b0 chore: record Control Tower enterprise building surface`
+
+### 검증
+- Dashboard API tests: 13 passed.
+- `py_compile` PASS.
+- frontend build PASS, chunk-size warning only.
+- xrev PASS, blocker 없음.
+- dist 산출물 제외.
+
+### 미수행
+- 배포/G3 sync/restart/DB/secrets/auth/cron/wiki 변경 없음.
+
+
 ## 2026-05-06 — Control Tower 3트랙 병렬 에이전트 조사
 
 ### 작업 내용
