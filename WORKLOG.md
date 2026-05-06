@@ -1,5 +1,38 @@
 # hermes-agent WORKLOG
 
+## 2026-05-06 | OpenClaw policy 2 skill synchronization before gateway service restart
+
+### 작업 내용
+- 사용자 지적에 따라 gateway 서비스 재시작 전 auto-save 절차가 축약됐던 문제를 인정하고, 관련 스킬을 정책 2번 기준으로 동기화했다.
+- `hermes-agent-auto-save`에 skill synchronization을 auto-save 필수 완료 조건으로 추가했다.
+- `hermes-openclaw-protected-auto-update`, `openclaw-hermes-arbiter-integration`, `hermes-openclaw-arbiter-integration`, `vibe-alphamate-control-tower`의 낡은 read-only/exact allowlist 설명을 policy-2 기준으로 보정했다.
+- 정책 2번 기준: `openclaw_exec`/`openclaw_cli`는 대부분 즉시 실행 가능하되, 재부팅/DB/secrets/auth/wiki/raw/gateway-service restart/G3 운영/되돌리기 어려운 외부작업은 approval packet 유지.
+
+### 산출물
+- 스킬 패치:
+  - `hermes-agent-auto-save`
+  - `hermes-openclaw-protected-auto-update`
+  - `openclaw-hermes-arbiter-integration`
+  - `hermes-openclaw-arbiter-integration`
+  - `vibe-alphamate-control-tower`
+- raw/dev save note:
+  - `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-06-openclaw-policy-2-skill-sync-save.md`
+
+### 검증
+- 낡은 allowlist 문구 검색 완료.
+- `policy-2`, `openclaw_exec`, `/work`, `/do`, `Skill synchronization` 반영 검색 확인.
+- Hermes repo 최신 커밋 `c7fadc9c8` 상태 확인.
+- gateway/service restart는 아직 수행하지 않았다.
+
+### 안전 경계
+- G3 서비스 재시작/배포/sync 없음.
+- DB/secrets/auth 실제 변경 없음.
+- Obsidian wiki apply 없음.
+- gateway/service restart 없음.
+- 시스템 재부팅 없음.
+
+---
+
 ## 2026-05-06 | OpenClaw bridge policy 2 expansion
 
 ### 작업 내용
@@ -59,7 +92,6 @@
 - `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-06-alpha-workflow-contract-v2-pocock-fundamentals.md`
 - `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-06-enterprise-ai-organization-final-plan-v2-pocock.md`
 
-
 ### 검증
 - v2 문서 line/byte count 확인 완료.
 - 필수 키워드 확인: Grill Me, Ubiquitous, TDD, Deep Module, Grey Box, Design Investment, OpenClaw, G3, wiki, save-sync.
@@ -69,65 +101,6 @@
 - 코드 변경 없음.
 - G3 서비스 재시작/배포/sync 없음.
 - DB/secrets/auth 변경 없음.
-- Obsidian wiki apply 없음.
-- gateway/service restart 없음.
-- 시스템 재부팅 없음.
-
----
-
-## 2026-05-06 | Enterprise AI Organization final plan
-
-### 작업 내용
-- 전수조사 정제 산출물 4개와 Alpha Workflow R0-R3 구현 결과를 반영해 최종 계획 v1을 작성했다.
-- 최종 계획에 CEO/COO/본부/팀장/worker 구조, Telegram topic/profile/bot 단계, A8/Desktop/G3 역할, Hermes/Claude/Codex/OpenClaw/MCP 정책, AlphaMate/AlphaVaults/Obsidian 권한 경계를 통합했다.
-- OpenClaw는 사용자 정책에 따라 Hermes-controlled execution이면 매번 승인 없이 실행 가능하되, G3/wiki/DB/secrets/auth 게이트 우회는 금지로 정리했다.
-
-### 산출물
-- `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-06-enterprise-ai-organization-final-plan.md`
-- `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-06-alpha-workflow-code-save-checkpoint.md`
-- 저장 브랜치: `feat/alpha-workflow-r0-r3-ai-org-20260506`
-- 커밋/푸시: 이 WORKLOG 포함 최신 커밋은 `git log -1 --oneline` 기준이며 `fork/feat/alpha-workflow-r0-r3-ai-org-20260506`에 push 완료
-
-### 검증
-- 최종 계획 473줄 / 15,717 bytes 작성 확인.
-- 필수 키워드 확인: CEO, Control Tower, OpenClaw, AlphaMate, AlphaVaults, Obsidian, A8, Desktop, G3, R0/R1/R2/R3, 26 passed, xrev.
-- strict secret scan: 0 hits.
-- 코드 검증: Alpha Workflow targeted pytest 26 passed, xrev 독립 리뷰 PASS.
-
-### 안전 경계
-- G3 서비스 재시작/배포/sync 없음.
-- DB/secrets/auth 실제 변경 없음.
-- Obsidian wiki apply 없음.
-- gateway/service restart 없음.
-- 시스템 재부팅 없음.
-
----
-
-## 2026-05-06 | Alpha Workflow R0-R3 code implementation
-
-### 작업 내용
-- Alpha Workflow runtime primitive 4개를 TDD로 구현했다.
-  - `agent/alpha_workflow_registry.py`
-  - `agent/alpha_workflow_router.py`
-  - `agent/alpha_workflow_approval.py`
-  - `agent/alpha_workflow_save_record.py`
-- 테스트 4개를 추가했다.
-  - `tests/agent/test_alpha_workflow_registry.py`
-  - `tests/agent/test_alpha_workflow_router.py`
-  - `tests/agent/test_alpha_workflow_approval.py`
-  - `tests/agent/test_alpha_workflow_save_record.py`
-- 사용자 지시에 따라 OpenClaw는 Hermes-controlled execution 범위에서 매번 승인 없이 실행 가능하도록 router 정책을 반영했다.
-- G3 운영 변경, wiki apply, DB/secrets/auth, service restart/system reboot 모호성은 OpenClaw 언급 여부와 무관하게 gate 유지했다.
-
-### 검증
-- RED 확인 후 production 구현 완료.
-- targeted pytest: 26 passed.
-- xrev 독립 리뷰 4차 통과.
-- secret-like output guard, blocked packet guard, G3 재부팅 표현, OpenClaw 자율 실행 정책 회귀 보강 완료.
-
-### 안전 경계
-- G3 서비스 재시작/배포/sync 없음.
-- DB/secrets/auth 실제 변경 없음.
 - Obsidian wiki apply 없음.
 - gateway/service restart 없음.
 - 시스템 재부팅 없음.
