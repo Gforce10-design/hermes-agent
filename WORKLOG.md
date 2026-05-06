@@ -1,5 +1,21 @@
 # hermes-agent WORKLOG
 
+## 2026-05-06 — AlphaCommand IA v0 / Mission Packet Contract v0
+
+### 작업 내용
+- AlphaCommand 정보구조 v0 작성: CEO Lobby, Mission Queue, Approval Inbox, Evidence Room, Ledger, Domain Boards, Role/Task Force, Save-Sync.
+- AlphaNexus Mission Packet Contract v0 작성: classification, routing, evidence, approval, execution, ledger, verification, save-sync.
+
+### 산출물
+- `hermes-2026-05-06-alpha-command-ia-v0.md`
+- `hermes-2026-05-06-alpha-nexus-mission-packet-contract-v0.md`
+
+### 검증
+- line count와 핵심 marker 확인.
+- 비용/개인정보 강한 게이트 포함 확인.
+- 코드/API/UI/배포/G3/DB/secrets/auth/cron/wiki 변경 없음.
+
+
 ## 2026-05-06 — AlphaNexus 아이디어 단계 승인 및 도메인 v0
 
 ### 작업 내용
