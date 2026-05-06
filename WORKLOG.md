@@ -1,5 +1,31 @@
 # hermes-agent WORKLOG
 
+## 2026-05-06 — master plan v3 review patch
+
+### 작업 내용
+- 통합 마스터 플랜에 독립 리뷰 보강사항 반영.
+- 추가: glossary, RACI/충돌 규칙, packet type 확장, 문서 저장 위치별 승인 규칙, cron/external-auth routing, phase exit criteria, gstack/Superpowers review 산출물 보존, CEO 미결정 질문.
+
+### 산출물
+- `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-06-enterprise-ai-organization-master-plan-v3.md`
+
+### 검증
+- keyword check: PASS
+- docs-only 변경. 코드/API/UI/cron/job/gateway/service/G3/DB/secrets/auth/wiki 변경 없음.
+
+
+## 2026-05-06 — Enterprise AI Organization master plan v3 consolidation
+
+### 작업 내용
+- 사용자 지적 반영: Enterprise AI Organization 계획, Alpha Workflow 계약, 통합 구현 계획을 하나의 마스터 플랜으로 병합.
+- tri-tool DDD, gstack-style office hours/plan review, Superpowers writing/subagent workflow, Hermes save-sync 기준으로 최적화 워크플로우를 재정렬.
+- 최신 기준 문서 생성: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-06-enterprise-ai-organization-master-plan-v3.md`.
+
+### 검증
+- keyword check: PASS
+- docs-only 변경. 코드/API/UI/cron/job/gateway/service/G3/DB/secrets/auth/wiki 변경 없음.
+
+
 ## 2026-05-06 — Alpha Workflow v3 integrated implementation plan
 
 ### 작업 내용
