@@ -1020,6 +1020,8 @@ class GatewayRunner:
         self._pending_native_image_paths_by_session: Dict[str, List[str]] = {}
         self._busy_ack_ts: Dict[str, float] = {}  # last busy-ack timestamp per session (debounce)
         self._session_run_generation: Dict[str, int] = {}
+        # Per-session context landing notification de-duplication state.
+        self._context_landing_states: Dict[str, Any] = {}
 
         # Cache AIAgent instances per session to preserve prompt caching.
         # Without this, a new AIAgent is created per message, rebuilding the
@@ -6500,10 +6502,12 @@ class GatewayRunner:
             # streaming already delivered the body, we can't mutate the sent
             # text, so we fire a separate trailing send below.
             _footer_line = ""
+            _gateway_user_config = None
             try:
                 from gateway.runtime_footer import build_footer_line as _bfl
+                _gateway_user_config = _load_gateway_config()
                 _footer_line = _bfl(
-                    user_config=_load_gateway_config(),
+                    user_config=_gateway_user_config,
                     platform_key=_platform_config_key(source.platform),
                     model=agent_result.get("model"),
                     context_tokens=agent_result.get("last_prompt_tokens", 0) or 0,
@@ -6513,6 +6517,57 @@ class GatewayRunner:
             except Exception as _footer_err:
                 logger.debug("runtime_footer build failed: %s", _footer_err)
                 _footer_line = ""
+            _landing_line = ""
+            try:
+                from gateway.context_landing import (
+                    ContextLandingState as _ContextLandingState,
+                    build_landing_note as _build_landing_note,
+                    evaluate_context_landing as _evaluate_context_landing,
+                    resolve_context_landing_config as _resolve_context_landing_config,
+                    write_landing_note as _write_landing_note,
+                )
+                if _gateway_user_config is None:
+                    _gateway_user_config = _load_gateway_config()
+                _landing_cfg = _resolve_context_landing_config(_gateway_user_config)
+                _landing_platform = _platform_config_key(source.platform)
+                if _landing_platform == "telegram" and not _landing_cfg.get("telegram_notify", True):
+                    _landing_cfg = {**_landing_cfg, "enabled": False}
+                _landing_state = self._context_landing_states.setdefault(
+                    session_key,
+                    _ContextLandingState(),
+                )
+                _landing_event = _evaluate_context_landing(
+                    agent_result.get("last_prompt_tokens", 0) or 0,
+                    agent_result.get("context_length") or None,
+                    _landing_cfg,
+                    _landing_state,
+                    commit_state=False,
+                )
+                if _landing_event.should_notify:
+                    _landing_line = _landing_event.message
+                    if _landing_event.should_write_note:
+                        _note = _build_landing_note(
+                            percent=_landing_event.percent,
+                            stage=_landing_event.stage,
+                            model=agent_result.get("model"),
+                            provider=agent_result.get("provider") or getattr(agent, "provider", None),
+                            context_tokens=agent_result.get("last_prompt_tokens", 0) or 0,
+                            context_length=agent_result.get("context_length") or None,
+                            platform=source.platform.value if source.platform else None,
+                            session_id=session_entry.session_id if session_entry else None,
+                            workdir=os.environ.get("TERMINAL_CWD", ""),
+                        )
+                        _note_path = _write_landing_note(_note)
+                        _landing_state.last_note_path = str(_note_path)
+                        _landing_line = f"{_landing_line}\nLanding note: `{_note_path}`"
+                    _landing_state.last_threshold = _landing_event.threshold
+                    import time as _time
+                    _landing_state.last_notified_at = _time.time()
+            except Exception as _landing_err:
+                logger.debug("context landing evaluation failed: %s", _landing_err)
+                _landing_line = ""
+            if _landing_line and response and not agent_result.get("already_sent"):
+                response = f"{response}\n\n{_landing_line}"
             if _footer_line and response and not agent_result.get("already_sent"):
                 response = f"{response}\n\n{_footer_line}"
 
@@ -6725,10 +6780,15 @@ class GatewayRunner:
                         await self._deliver_media_from_response(
                             response, event, _media_adapter,
                         )
-                # Streaming already delivered the body text, but the footer was
-                # intentionally held back (see the `not already_sent` gate above).
-                # Send it now as a small trailing message so Telegram/Discord/etc.
-                # still surface the runtime metadata on the final reply.
+                # Send landing/status notification and runtime footer as small
+                # trailing messages when streaming already delivered the body.
+                if _landing_line:
+                    try:
+                        _land_adapter = self.adapters.get(source.platform)
+                        if _land_adapter:
+                            await _land_adapter.send(source.chat_id, _landing_line)
+                    except Exception as _e:
+                        logger.debug("context landing send failed: %s", _e)
                 if _footer_line:
                     try:
                         _foot_adapter = self.adapters.get(source.platform)

@@ -638,6 +638,18 @@ DEFAULT_CONFIG = {
         "hygiene_hard_message_limit": 400,  # gateway session-hygiene force-compress threshold by message count
     },
 
+    # Pre-compression landing policy. This does not trigger compression; it only
+    # notifies/saves recoverable state before compression.threshold is reached.
+    "context_landing": {
+        "enabled": False,
+        "prepare_threshold": 0.72,
+        "save_threshold": 0.82,
+        "notify_thresholds": [0.72, 0.82, 0.90],
+        "min_notify_interval_seconds": 900,
+        "auto_landing_note": True,
+        "telegram_notify": True,
+    },
+
     # Anthropic prompt caching (Claude via OpenRouter or native Anthropic API).
     # cache_ttl must be "5m" or "1h" (Anthropic-supported tiers); other values are ignored.
     "prompt_caching": {
