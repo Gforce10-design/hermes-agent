@@ -1,5 +1,19 @@
 # hermes-agent WORKLOG
 
+## 2026-05-06 — AlphaNexus CEO Question Round v1
+
+### 작업 내용
+- AlphaCommand UI Slice Plan으로 넘어가기 전 사용자 확인이 필요한 항목을 CEO Question Round v1로 정리했다.
+- 첫 화면 우선순위, 비서실 범위, 금융·투자 수준, 역할 표시 방식, 알파 선제 제안 수준, 도메인 누락, 화면 언어, 완료 기준, 모바일/Telegram 우선순위, AlphaMate/금융 관계를 질문으로 분리했다.
+
+### 산출물
+- `hermes-2026-05-06-alpha-nexus-ceo-question-round-v1.md`
+
+### 검증
+- line count와 Q1/Q5/Q10/구현 금지 marker 확인.
+- 코드/API/UI/배포/G3/DB/secrets/auth/cron/wiki 변경 없음.
+
+
 ## 2026-05-06 — AlphaNexus Routing Matrix / Golden Packets v0
 
 ### 작업 내용
