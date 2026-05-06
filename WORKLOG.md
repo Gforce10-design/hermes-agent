@@ -1,5 +1,24 @@
 # hermes-agent WORKLOG
 
+## 2026-05-06 — AlphaCommand 야간 자율 설계 진행
+
+### 작업 내용
+- 사용자 수면 전 답변을 CEO Question Round v1에 반영했다.
+- AlphaCommand UI Slice Plan v0 작성.
+- Routing/Golden Packets v1 Revision 작성.
+- 독립 리뷰 2건 실행 후 Roles/Task Force 별도 탭, 수면 중 commit/push 제한, 권한 확대 evidence 강화, 비서실 하루 운영 UX를 보정했다.
+
+### 산출물
+- `hermes-2026-05-06-alpha-command-ui-slice-plan-v0.md`
+- `hermes-2026-05-06-alpha-nexus-routing-golden-v1-revision.md`
+- `hermes-2026-05-06-alpha-nexus-ceo-question-round-v1.md` 답변 반영
+
+### 검증
+- line count/keyword check PASS.
+- 독립 리뷰 2건 완료, blocker 없음. 보정 완료.
+- 코드/API/UI/배포/G3/DB/secrets/auth/cron/wiki 변경 없음.
+
+
 ## 2026-05-06 — AlphaNexus CEO Question Round v1
 
 ### 작업 내용
