@@ -9,6 +9,7 @@
 - upstream PR #78115는 optional maintainer review/record로 유지.
 - OpenClaw repo root에 남아 있던 PR scratch markdown 2개를 Hermes workspace artifact 폴더로 이동했다.
 - `github-auth` 스킬에 headless/Telegram device-code login 절차를 보강하고, A8 gh 인증 상태를 durable memory에 저장했다.
+- fork PR #1 CI/merge 상태 감시 크론 `16a61433a21d`를 15분 간격, 96회로 등록했다.
 
 ### 검증
 - `gh auth status` → `Gforce10-design` 로그인 확인.

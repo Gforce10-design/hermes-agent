@@ -25,6 +25,7 @@
 ## Cross-runtime / machine sync
 - Source interface: Telegram DM.
 - Runtime surfaces updated: Hermes WORKLOG/HANDOFF, Obsidian raw/dev, durable memory, `github-auth` skill, GitHub fork PR.
+- Fork PR #1 watcher cron: `16a61433a21d`, every 15m, 96 runs, read-only.
 - A8: current authoritative runtime.
 - Desktop/G3: pull-needed only if they need this OpenClaw fork branch; no production service restart/deploy was performed.
 
