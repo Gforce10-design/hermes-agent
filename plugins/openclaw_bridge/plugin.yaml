@@ -1,10 +1,10 @@
 name: openclaw-bridge
-version: 0.2.0
-description: "Expose OpenClaw as a Hermes-controlled execution engine with broad trusted argv execution and high-risk approval gates."
-author: Hermes Agent
+version: 0.4.0
+description: "Local OpenClaw bridge: Hermes-controlled arbitrary argv execution with high-risk approval gates, status, and worker trigger contract."
+author: sudol/Hermes
 kind: standalone
-platforms:
-  - linux
 provides_tools:
-  - openclaw_exec
   - openclaw_status
+  - openclaw_exec
+  - openclaw_cli
+  - openclaw_worker_trigger

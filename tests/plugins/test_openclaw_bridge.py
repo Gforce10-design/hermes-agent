@@ -27,16 +27,20 @@ def _load_tools():
 
 def test_exec_allows_arbitrary_low_risk_openclaw_argv(monkeypatch):
     tools = _load_tools()
+    monkeypatch.setattr(tools, "_resolve_openclaw_bin", lambda: "/usr/bin/openclaw")
 
-    def fake_run(argv, **kwargs):
-        assert argv == [tools.OPENCLAW_BIN, "devices", "list", "--json"]
-        class Result:
-            returncode = 0
-            stdout = '{"devices":[]}'
-            stderr = ""
-        return Result()
+    def fake_run(command, **kwargs):
+        assert command == ["/usr/bin/openclaw", "devices", "list", "--json"]
+        return {
+            "returncode": 0,
+            "timed_out": False,
+            "stdout": '{"devices":[]}',
+            "stderr": "",
+            "stdout_truncated": False,
+            "stderr_truncated": False,
+        }
 
-    monkeypatch.setattr(tools.subprocess, "run", fake_run)
+    monkeypatch.setattr(tools, "_run_bounded_subprocess", fake_run)
     result = json.loads(tools.handle_openclaw_exec({"argv": ["devices", "list", "--json"], "trace_id": "t-1"}))
     assert result["success"] is True
     assert result["executed"] is True
@@ -47,15 +51,17 @@ def test_exec_allows_arbitrary_low_risk_openclaw_argv(monkeypatch):
 def test_exec_blocks_reboot_db_secrets_auth_and_wiki_apply_before_running(monkeypatch):
     tools = _load_tools()
     calls = []
-    monkeypatch.setattr(tools.subprocess, "run", lambda *a, **k: calls.append((a, k)))
+    monkeypatch.setattr(tools, "_run_bounded_subprocess", lambda *a, **k: calls.append((a, k)))
 
     cases = [
         ["gateway", "restart"],
         ["worker", "run", "g3", "reboot"],
         ["db", "migrate"],
         ["secrets", "set", "TOKEN", "x"],
+        ["api_key", "set", "x"],
         ["auth", "login"],
         ["wiki", "apply"],
+        ["wiki", "raw"],
     ]
     for argv in cases:
         result = json.loads(tools.handle_openclaw_exec({"argv": argv, "trace_id": "t-2"}))
@@ -68,15 +74,19 @@ def test_exec_blocks_reboot_db_secrets_auth_and_wiki_apply_before_running(monkey
 
 def test_exec_rejects_shell_string_and_redacts_secret_like_output(monkeypatch):
     tools = _load_tools()
+    monkeypatch.setattr(tools, "_resolve_openclaw_bin", lambda: "/usr/bin/openclaw")
 
-    def fake_run(argv, **kwargs):
-        class Result:
-            returncode = 0
-            stdout = "token=" + "ghp_" + "abcdefghijklmnopqrstuvwxyz123456" + " secret=" + "sk-" + "abcdefghijklmnopqrstuvwxyz123456"
-            stderr = ""
-        return Result()
+    def fake_run(command, **kwargs):
+        return {
+            "returncode": 0,
+            "timed_out": False,
+            "stdout": "token=" + "ghp_" + "abcdefghijklmnopqrstuvwxyz123456" + " secret=" + "sk-" + "abcdefghijklmnopqrstuvwxyz123456",
+            "stderr": "",
+            "stdout_truncated": False,
+            "stderr_truncated": False,
+        }
 
-    monkeypatch.setattr(tools.subprocess, "run", fake_run)
+    monkeypatch.setattr(tools, "_run_bounded_subprocess", fake_run)
     rejected = json.loads(tools.handle_openclaw_exec({"argv": "devices list", "trace_id": "t-3"}))
     assert rejected["success"] is False
     assert rejected["executed"] is False
@@ -85,3 +95,21 @@ def test_exec_rejects_shell_string_and_redacts_secret_like_output(monkeypatch):
     assert "ghp_" not in result["stdout"]
     assert "sk-" not in result["stdout"]
     assert "[REDACTED]" in result["stdout"]
+
+
+def test_existing_cli_alias_and_worker_trigger_contract_are_preserved(monkeypatch):
+    tools = _load_tools()
+    assert hasattr(tools, "handle_openclaw_cli")
+    assert hasattr(tools, "handle_openclaw_worker_trigger")
+
+    cli = json.loads(tools.handle_openclaw_cli({"args": ["wiki", "raw"]}))
+    assert cli["approval_required"] is True
+    assert cli["allowed_next_step"] == "approval_packet"
+
+    dry = json.loads(tools.handle_openclaw_worker_trigger({"argv": ["worker", "trigger", "loop"], "dry_run": True}))
+    assert dry["success"] is True
+    assert dry["dry_run"] is True
+
+    denied = json.loads(tools.handle_openclaw_worker_trigger({"argv": ["worker", "trigger", "loop"], "execute": True}))
+    assert denied["success"] is False
+    assert "approval_state" in denied["error"]

@@ -24,8 +24,11 @@
 ### 검증
 - RED: 신규 테스트 3개가 구현 전 `FileNotFoundError`로 실패.
 - GREEN: `tests/plugins/test_openclaw_bridge.py` → 3 passed.
-- 통합: `tests/plugins/test_openclaw_bridge.py tests/agent/test_alpha_workflow_router.py` → 13 passed.
+- 통합: `tests/plugins/test_openclaw_bridge.py tests/agent/test_alpha_workflow_router.py` → 14 passed.
 - py_compile: repo plugin + 활성 사용자 plugin PASS.
+- secret-like scan on changed plugin/test files: 0 hits.
+- xrev 독립 리뷰: 초기 차단 5건 발견 후 모두 보정.
+- xrev 보정 내용: `openclaw_cli`/`openclaw_worker_trigger` repo 호환 복원, bounded subprocess output cap 적용, `wiki raw`/`api_key` gate 보강, 상대 import 적용.
 - 활성 플러그인 확인: `openclaw-bridge` enabled, v0.4.0, source user.
 - 직접 handler smoke: `--version` executed true, `gateway restart` approval_packet, `devices list` executed true.
 

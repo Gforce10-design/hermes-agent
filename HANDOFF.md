@@ -34,15 +34,22 @@
 - high-risk gate:
   - reboot/shutdown.
   - DB/migration.
-  - secrets/token/credential.
+  - secrets/token/credential/api_key.
   - auth/login/permission.
-  - wiki apply/raw overwrite.
+  - wiki apply/raw overwrite/raw access.
+- xrev 보정:
+  - repo bundled 후보에도 `openclaw_cli`, `openclaw_worker_trigger` 호환 계약을 복원.
+  - 실행 경로를 bounded subprocess로 통일해 출력 cap을 실행 중 적용.
+  - `wiki raw`, `api_key` 누락 게이트 보강.
+  - repo plugin import를 상대 import로 맞춰 user plugin override와 충돌 가능성 제거.
 
 ## 검증
 - RED: `tests/plugins/test_openclaw_bridge.py` 신규 테스트 3개가 구현 전 `FileNotFoundError`로 실패.
 - GREEN: `./venv/bin/python -m pytest tests/plugins/test_openclaw_bridge.py -q -o 'addopts='` → 3 passed.
-- 통합: `./venv/bin/python -m pytest tests/plugins/test_openclaw_bridge.py tests/agent/test_alpha_workflow_router.py -q -o 'addopts='` → 13 passed.
+- 통합: `./venv/bin/python -m pytest tests/plugins/test_openclaw_bridge.py tests/agent/test_alpha_workflow_router.py -q -o 'addopts='` → 14 passed.
 - py_compile: repo plugin + 활성 사용자 plugin PASS.
+- secret-like scan on changed plugin/test files: 0 hits.
+- xrev 독립 리뷰: 초기 차단 5건 발견 후 모두 보정.
 - 활성 플러그인: `openclaw-bridge` enabled, v0.4.0, source user.
 - 직접 handler smoke:
   - `['--version']` executed true.
