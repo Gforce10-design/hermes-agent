@@ -1,5 +1,21 @@
 # hermes-agent WORKLOG
 
+## 2026-05-06 — AlphaNexus 아이디어 단계 승인 및 도메인 v0
+
+### 작업 내용
+- 사용자 승인에 따라 이름 삼층 구조, 역할명 v3, 도메인 v2, AlphaMate 상징 브랜드 위치를 승인 상태로 반영했다.
+- 아이디어 단계 워크플로우에 따라 `AlphaNexus Domain Map v0`와 `Domain Charters v0`를 작성했다.
+
+### 산출물
+- `hermes-2026-05-06-enterprise-ai-idea-stage-workflow-restart.md`
+- `hermes-2026-05-06-alpha-nexus-domain-map-v0.md`
+- `hermes-2026-05-06-alpha-nexus-domain-charters-v0.md`
+
+### 검증
+- 문서 line count와 핵심 marker 확인.
+- 코드/API/UI/배포/G3/DB/secrets/auth/cron/wiki 변경 없음.
+
+
 ## 2026-05-06 — Control Tower Enterprise AI 사옥 표면 구현 저장
 
 ### 작업 내용
