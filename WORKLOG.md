@@ -1,5 +1,35 @@
 # hermes-agent WORKLOG
 
+## 2026-05-06 | Skills/plugins/MCP/CLI recheck after auto-save correction
+
+### 작업 내용
+- 사용자의 추가 지적에 따라 auto-save뿐 아니라 스킬/플러그인/MCP/CLI/Codex/Claude 원천 상태를 재점검했다.
+- Claude 원천 스킬 8개, Codex cached skills 11개, Hermes skills 178개, Hermes plugins/toolsets/MCP/config 상태를 확인했다.
+- `hermes-agent-auto-save`를 Claude AlphaMate auto-save 원천과 Codex GitHub publish discipline 기준으로 보강했다.
+- 명시 트리거에 `커밋`, `commit`, `push`를 추가하고, code/non-code completion trigger, hostname 기반 머신 sync 기록, model/runtime work-share files, Codex/GitHub staging/push discipline을 반영했다.
+
+### 산출물
+- 스킬 패치: `hermes-agent-auto-save`.
+- raw/dev save note:
+  - `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-06-skills-plugins-mcp-cli-recheck-save.md`
+
+### 검증
+- 현재 머신: `A8Max`.
+- CLI 확인: Claude Code `2.1.121`, Codex CLI `0.124.0`, OpenClaw `2026.5.5`.
+- Hermes plugins: `disk-cleanup`, `openclaw-bridge v0.4.0` enabled.
+- Hermes MCP: configured server 없음.
+- config check: version 23 OK, Telegram env present.
+- shared-state repo 존재 확인 후, RULES 기준 새 파일 남발 대신 Hermes HANDOFF/WORKLOG/raw-dev에 기록하기로 판단.
+
+### 안전 경계
+- G3 서비스 재시작/배포/sync 없음.
+- DB/secrets/auth 실제 변경 없음.
+- Obsidian wiki apply 없음.
+- gateway/service restart 없음.
+- 시스템 재부팅 없음.
+
+---
+
 ## 2026-05-06 | OpenClaw policy 2 skill synchronization before gateway service restart
 
 ### 작업 내용
