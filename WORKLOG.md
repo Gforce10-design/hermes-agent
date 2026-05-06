@@ -1,5 +1,20 @@
 # hermes-agent WORKLOG
 
+## 2026-05-06 — Control Tower 별도 구현 트랙 정정
+
+### 작업 내용
+- 사용자 지적에 따라 ABC 부록식 분리가 아니라 AI R&D=부서, Control Tower=Enterprise AI 사옥/본사 표면, Packet=회사 운영 표준으로 Master Plan v3 개념을 정정했다.
+- Control Tower는 이미 AlphaMate 쪽 진행 기반이 있으므로 별도 구현 트랙으로 우선 진행하는 계획을 raw/dev에 생성했다.
+
+### 산출물
+- `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-06-control-tower-separate-execution-track-plan.md`
+- `hermes-2026-05-06-enterprise-ai-organization-master-plan-v3.md` 상단/조직/phase/Control Tower 섹션 정정
+
+### 검증
+- Master Plan v3에서 `사옥`, `AI R&D / Trend-to-Upgrade 부서`, `회사 운영 표준` marker 확인.
+- Control Tower 기준 파일과 AlphaMate/Dashboard git 상태 read-only 확인.
+- 코드/API/UI/cron/job/gateway/G3/DB/secrets/auth/wiki 변경 없음.
+
 ## 2026-05-06 — Master Plan v3 하위 산출물 단일 문서 흡수 정정
 
 ### 작업 내용
