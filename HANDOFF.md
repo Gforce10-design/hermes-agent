@@ -1,4 +1,4 @@
-# Hermes Agent Handoff — 2026-05-06 master plan v3 review-patched
+# Hermes Agent Handoff — 2026-05-06 Alpha Workflow v3 docs package
 
 ## Current state
 - Machine: A8Max / A8 WSL
@@ -7,17 +7,20 @@
 - This handoff is included in the next save commit.
 
 ## Last work
-- Consolidated Enterprise AI Organization, Alpha Workflow contract, and integrated implementation plan into one master plan.
-- Ran two independent reviews and patched the master plan with missing execution contract details.
-- Master plan path: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-06-enterprise-ai-organization-master-plan-v3.md`.
+- Created three docs-only artifacts under Obsidian raw/dev:
+  1. Golden Mission Packet fixtures
+  2. AI R&D Candidate Card examples
+  3. Control Tower UI/API read-only plan
+- Ran two independent reviews and patched gaps:
+  - schema normalization for packet fields/types
+  - AI R&D retention/redaction fields
+  - read-only verification criteria for API/UI plan
 
 ## Verification
 - Keyword check: PASS.
 - Docs-only change; no code/config/runtime mutation.
 - No cron/job creation, no gateway/service restart, no system reboot, no G3 operation, no DB/secrets/auth/wiki apply.
 
-## Next safe tasks
-1. Golden Mission Packet fixture document.
-2. AI R&D Candidate Card examples.
-3. Control Tower UI/API read-only plan.
-4. Stop before code/config/service/auth/cron mutations unless approved.
+## Next tasks
+- If continuing docs-only: integrate links/status into master plan and prepare CEO approval packet for first code slice.
+- If moving to implementation: require explicit approval before code/API/UI changes.

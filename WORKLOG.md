@@ -1,5 +1,22 @@
 # hermes-agent WORKLOG
 
+## 2026-05-06 — Alpha Workflow v3 fixtures/cards/ui read-only docs
+
+### 작업 내용
+- 마스터 플랜의 다음 안전 작업 3개 진행: Golden Mission Packet fixtures, AI R&D Candidate Card examples, Control Tower UI/API read-only plan.
+- 독립 리뷰 2건 실행 후 schema normalization, retention/redaction fields, read-only verification criteria 보강.
+
+### 산출물
+- `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-06-alpha-workflow-v3-golden-mission-packets.md`
+- `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-06-alpha-workflow-v3-ai-rnd-candidate-cards.md`
+- `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-06-alpha-workflow-v3-control-tower-ui-api-readonly-plan.md`
+
+### 검증
+- keyword check: PASS
+- 리뷰 결과: docs 기준 통과, 구현 전 정규화 필요 항목 보강 완료.
+- docs-only 변경. 코드/API/UI/cron/job/gateway/service/G3/DB/secrets/auth/wiki 변경 없음.
+
+
 ## 2026-05-06 — master plan v3 review patch
 
 ### 작업 내용
