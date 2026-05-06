@@ -1,5 +1,20 @@
 # hermes-agent WORKLOG
 
+## 2026-05-06 — v3 add AI R&D Trend-to-Upgrade team
+
+### 작업 내용
+- 사용자 요구 반영: 개발팀에 최신 AI 뉴스/기술/논문/스킬/트렌드를 모니터링하고 AlphaMate 적용 가능성을 평가해 자체 업그레이드하는 기능 추가.
+- v3 deep-design draft에 `AI R&D / Trend-to-Upgrade 팀`, 평가 루프, 적용 기준, 산출물, MVP Slice 6 추가.
+- blogwatcher/arxiv skill을 확인해 RSS/논문 수집 경로를 설계에 반영.
+
+### 산출물
+- `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-06-enterprise-ai-organization-v3-deep-design-draft.md`
+
+### 검증
+- keyword check: PASS
+- docs-only 변경. 자동 적용/서비스 재시작/시스템 재부팅/G3 운영/DB·secrets·auth·wiki apply 없음.
+
+
 ## 2026-05-06 — Enterprise AI Organization v3 deep-design draft
 
 ### 작업 내용
