@@ -1,5 +1,25 @@
 # hermes-agent WORKLOG
 
+## 2026-05-06 — AlphaCommand v1 read-only surface implementation
+
+### 작업 내용
+- 수면/부재 중 단순 승인 자율모드 범위에서 read-only UI/API slice 구현.
+- AlphaCommand v1 우선순위, 권한 단계, OpenClaw evidence lane을 Dashboard API/UI에 반영.
+
+### 커밋
+- Dashboard: `308d75e feat: add AlphaCommand v1 read-only surfaces`
+- AlphaMate parent: `0bcf1e3 chore: record AlphaCommand v1 read-only surfaces`
+
+### 검증
+- TDD RED/GREEN 완료, API tests 14 passed.
+- py_compile PASS, frontend build PASS.
+- xrev PASS, OpenClaw evidence 수집 완료.
+- dist 산출물 제외.
+
+### 미수행
+- 배포/G3 sync/restart/DB/secrets/auth/cron/wiki/비용/개인정보/외부발송/merge 없음.
+
+
 ## 2026-05-06 — AlphaCommand v1 OpenClaw evidence / autonomous approval packet
 
 ### 작업 내용
