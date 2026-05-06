@@ -1,5 +1,27 @@
 # hermes-agent WORKLOG
 
+## 2026-05-06 — OpenClaw fork PR + gh auth save
+
+### 작업 내용
+- A8 WSL에 GitHub CLI `gh`를 설치하고 device-code flow로 `Gforce10-design` 인증을 완료했다.
+- OpenClaw upstream PR #78115의 upstream merge/권한 대기 비용이 크다는 판단에 따라, `Gforce10-design/openclaw` fork PR을 운영 기준으로 생성했다.
+- fork PR #1 생성: https://github.com/Gforce10-design/openclaw/pull/1
+- upstream PR #78115는 optional maintainer review/record로 유지.
+- OpenClaw repo root에 남아 있던 PR scratch markdown 2개를 Hermes workspace artifact 폴더로 이동했다.
+- `github-auth` 스킬에 headless/Telegram device-code login 절차를 보강하고, A8 gh 인증 상태를 durable memory에 저장했다.
+
+### 검증
+- `gh auth status` → `Gforce10-design` 로그인 확인.
+- `gh repo view Gforce10-design/openclaw` 확인.
+- `gh pr view 1 --repo Gforce10-design/openclaw` → `OPEN`, `MERGEABLE`, queued CI 확인.
+- `/home/sudol/openclaw` branch `feat/worker-trigger-loop-local-contract-20260506`, commit `45b2af4e8f` 확인.
+
+### 안전 경계
+- G3 서비스 재시작/배포/sync 없음.
+- DB/secrets/auth 값 출력 없음. 단, `gh` OAuth 인증 상태는 사용자가 승인해 반영됨.
+- 시스템 재부팅 없음.
+- Hermes gateway 서비스 재시작 없음.
+
 ## 2026-05-06 — gateway restart preparation save
 
 ### 작업 내용
