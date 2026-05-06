@@ -1,5 +1,17 @@
 # hermes-agent WORKLOG
 
+## 2026-05-06 — gateway restart preparation save
+
+### 작업 내용
+- Hermes gateway 재시작 전 세이브 상태 재검증.
+- 현재 gateway active, openclaw-bridge v0.4.0 enabled, openclaw toolset enabled 확인.
+- 재시작 승인 패킷 초안 작성: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-06-gateway-restart-prep-save.md`.
+
+### 검증
+- git status/log/remote, gateway status, plugin/toolset 상태 확인.
+- gateway 서비스 재시작은 아직 실행하지 않음. 시스템 재부팅/G3 운영 변경/DB·secrets·auth·wiki 변경 없음.
+
+
 ## 2026-05-06 — source/custom skills + tools capability recheck
 
 ### 작업 내용
