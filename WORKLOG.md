@@ -1,5 +1,17 @@
 # hermes-agent WORKLOG
 
+## 2026-05-06 — source/custom skills + tools capability recheck
+
+### 작업 내용
+- 사용자 지적에 따라 auto-save뿐 아니라 원천 스킬, 커스텀 Hermes 스킬, Claude/Codex 스킬 원천, 플러그인, MCP, CLI, 활성 도구를 하나의 capability surface로 재점검.
+- `sudol-tool-use-discipline`에 source/custom skills + tools 통합 점검 원칙 보강.
+- raw/dev save note 작성: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-06-source-custom-skills-tools-recheck.md`.
+
+### 검증
+- Hermes skills/toolsets/plugins/MCP, Claude/Codex/OpenClaw CLI 버전, known source skill roots를 실제 명령으로 확인.
+- 서비스 재시작/시스템 재부팅/G3 운영 변경/DB·secrets·auth·wiki 변경 없음.
+
+
 ## 2026-05-06 | Skills/plugins/MCP/CLI recheck after auto-save correction
 
 ### 작업 내용
