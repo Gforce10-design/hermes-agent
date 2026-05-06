@@ -1,5 +1,17 @@
 # hermes-agent WORKLOG
 
+## 2026-05-06 — v3 AI R&D community collection channels
+
+### 작업 내용
+- 사용자 요구 반영: AI R&D 수집 채널에 국내외 AI 커뮤니티 포함.
+- Reddit, Threads, X/Twitter, Hacker News, Discord/Slack 공개 커뮤니티, Hugging Face/W&B/ComfyUI/LLM/Agent 커뮤니티, 국내 개발자·AI 커뮤니티/포럼/뉴스레터/공개 오픈채팅을 v3 초안에 추가.
+- xurl/xitter/blogwatcher 스킬을 확인해 인증/과금/공식 API/RSS/needs-auth/비밀값 금지 원칙을 반영.
+
+### 검증
+- keyword check: PASS
+- docs-only 변경. 서비스 재시작/시스템 재부팅/G3 운영/DB·secrets·auth·wiki apply 없음.
+
+
 ## 2026-05-06 — v3 add AI R&D Trend-to-Upgrade team
 
 ### 작업 내용
