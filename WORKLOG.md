@@ -1,5 +1,17 @@
 # hermes-agent WORKLOG
 
+## 2026-05-06 — v3 AI R&D lawful nonstandard source paths
+
+### 작업 내용
+- 사용자 정정 반영: “편법”을 일괄 제외하지 않고, 합법·권한 기반 비표준 참고 경로는 사용 가능하도록 v3 AI R&D 수집 원칙 보강.
+- 허용 예: 수동 열람, 요약 참고, 공식 내보내기, 개인 보관 자료, 사용자가 직접 제공한 자료, 검색 캐시/알림/뉴스레터/스크린샷 기반 참고.
+- 금지 예: paywall·접근통제 우회, 무단 크롤링, 계정 공유, 토큰/쿠키 탈취, 비공개 자료 재배포, 개인정보 수집, 금지된 자동화.
+
+### 검증
+- keyword check: PASS
+- docs-only 변경. 서비스 재시작/시스템 재부팅/G3 운영/DB·secrets·auth·wiki apply 없음.
+
+
 ## 2026-05-06 — v3 AI R&D private/paid source guardrail
 
 ### 작업 내용
