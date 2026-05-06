@@ -103,6 +103,17 @@ class TestFallbackChainAdvancement:
             assert agent.model == "gpt-4o"
             assert agent._fallback_activated is True
 
+    def test_claude_code_fallback_uses_cli_facade_not_api_provider(self):
+        agent = _make_agent(fallback_model={"provider": "claude-code", "model": "opus"})
+
+        assert agent._try_activate_fallback() is True
+        assert agent.provider == "claude-code"
+        assert agent.model == "opus"
+        assert agent.base_url == "cli://claude"
+        assert agent.api_mode == "chat_completions"
+        assert agent.api_key == "claude-cli-oauth"
+        assert hasattr(agent.client.chat.completions, "create")
+
     def test_second_fallback_works(self):
         fbs = [
             {"provider": "openai", "model": "gpt-4o"},

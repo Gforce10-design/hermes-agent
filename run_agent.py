@@ -33,6 +33,7 @@ import os
 import random
 import re
 import ssl
+import subprocess
 import sys
 import tempfile
 import time
@@ -58,6 +59,95 @@ from datetime import datetime
 from pathlib import Path
 
 from hermes_constants import get_hermes_home
+
+
+class _ClaudeCliChatCompletions:
+    """Tiny chat.completions-compatible wrapper around Claude Code print mode."""
+
+    def __init__(self, *, command: str = "claude", model: str = "opus", timeout: float = 300.0):
+        self.command = command or "claude"
+        self.model = model or "opus"
+        self.timeout = timeout
+
+    @staticmethod
+    def _content_to_text(content: Any) -> str:
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts = []
+            for item in content:
+                if isinstance(item, dict):
+                    text = item.get("text") or item.get("content")
+                    if text:
+                        parts.append(str(text))
+                else:
+                    parts.append(str(item))
+            return "\n".join(parts)
+        return "" if content is None else str(content)
+
+    def _messages_to_prompt(self, messages: list) -> str:
+        tail = messages[-120:] if isinstance(messages, list) else []
+        lines = [
+            "You are a fallback response generator for Hermes Agent.",
+            "Continue the user's task using the conversation below. Keep the answer concise and in the user's language.",
+            "Do not claim that you used Hermes tools; if tool access is needed, say what remains to verify.",
+            "",
+            "Conversation tail:",
+        ]
+        for msg in tail:
+            if not isinstance(msg, dict):
+                continue
+            role = msg.get("role", "message")
+            content = self._content_to_text(msg.get("content"))
+            if content:
+                lines.append(f"[{role}] {content}")
+            tool_calls = msg.get("tool_calls")
+            if tool_calls:
+                lines.append(f"[{role} tool_calls] {json.dumps(tool_calls, ensure_ascii=False)[:4000]}")
+        return "\n".join(lines).strip()
+
+    def create(self, **kwargs):
+        messages = kwargs.get("messages") or []
+        prompt = self._messages_to_prompt(messages)
+        cmd = [
+            self.command,
+            "-p",
+            "--model",
+            self.model,
+            "--output-format",
+            "text",
+            prompt,
+        ]
+        completed = subprocess.run(
+            cmd,
+            text=True,
+            capture_output=True,
+            timeout=self.timeout,
+            check=False,
+        )
+        if completed.returncode != 0:
+            err = (completed.stderr or completed.stdout or "Claude CLI failed").strip()
+            raise RuntimeError(err)
+        content = (completed.stdout or "").strip()
+        return SimpleNamespace(
+            model=self.model,
+            usage=None,
+            choices=[SimpleNamespace(
+                finish_reason="stop",
+                message=SimpleNamespace(role="assistant", content=content, tool_calls=None),
+            )],
+        )
+
+
+class _ClaudeCliChatClient:
+    """Minimal OpenAI-like client facade for Claude Code OAuth CLI fallback."""
+
+    def __init__(self, *, command: str = "claude", model: str = "opus", timeout: float = 300.0):
+        self.api_key = "claude-cli-oauth"
+        self.base_url = "cli://claude"
+        self.chat = SimpleNamespace(
+            completions=_ClaudeCliChatCompletions(command=command, model=model, timeout=timeout)
+        )
 
 
 _OPENAI_CLS_CACHE: Optional[type] = None
@@ -7660,6 +7750,32 @@ class AIAgent:
         fb_model = (fb.get("model") or "").strip()
         if not fb_provider or not fb_model:
             return self._try_activate_fallback()  # skip invalid, try next
+
+        if fb_provider in {"claude-code", "claude-cli"}:
+            old_model = self.model
+            cli_model = fb_model or "opus"
+            command = (fb.get("command") or os.getenv("HERMES_CLAUDE_CLI_COMMAND") or "claude").strip()
+            timeout_raw = fb.get("timeout") or os.getenv("HERMES_CLAUDE_CLI_TIMEOUT") or 300
+            try:
+                timeout = float(timeout_raw)
+            except Exception:
+                timeout = 300.0
+            self.model = cli_model
+            self.provider = "claude-code"
+            self.base_url = "cli://claude"
+            self.api_mode = "chat_completions"
+            self.api_key = "claude-cli-oauth"
+            self.client = _ClaudeCliChatClient(command=command, model=cli_model, timeout=timeout)
+            self._client_kwargs = {}
+            if hasattr(self, "_transport_cache"):
+                self._transport_cache.clear()
+            self._fallback_activated = True
+            self._emit_status("Codex 응답이 끊겨 Claude Code CLI로 폴백합니다.")
+            logging.info(
+                "Fallback activated via Claude CLI: %s → %s (%s)",
+                old_model, cli_model, command,
+            )
+            return True
 
         # Use centralized router for client construction.
         # raw_codex=True because the main agent needs direct responses.stream()

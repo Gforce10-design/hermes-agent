@@ -1,5 +1,25 @@
 # hermes-agent WORKLOG
 
+## 2026-05-07 | Claude CLI OAuth fallback implementation
+
+### 작업 내용
+- `provider: claude-code` / `provider: claude-cli` fallback이 Anthropic API가 아니라 로컬 Claude Code CLI OAuth 경로로 실행되도록 `run_agent.py`에 CLI facade를 추가.
+- 실행 경로는 `claude -p --model opus --output-format text`이며 내부 base URL은 `cli://claude`, api_key sentinel은 `claude-cli-oauth`로 표시.
+- `/home/sudol/.hermes/config.yaml` fallback을 `[{provider: claude-code, model: opus, timeout: 300}]`로 설정.
+- `tests/run_agent/test_provider_fallback.py`에 Claude CLI fallback이 API provider가 아닌 CLI facade로 활성화되는 회귀 테스트 추가.
+- `hermes-agent` skill에 A8 Claude CLI fallback 모델 alias/검증 규칙을 갱신.
+
+### 핵심 결정
+- Claude fallback은 API 금지, CLI OAuth만 사용한다.
+- CLI 모델명은 `opus` alias를 사용한다. 실측상 `opus`는 현재 계정에서 `claude-opus-4-7`로 동작하고, `opus4.7`/`opus4-7`은 CLI가 거부한다.
+- 이 구현은 Codex 장애 시 사용자 응답을 마무리하기 위한 degraded fallback이며, Hermes 도구 호출 전체를 Claude CLI 안에서 재실행하지 않는다.
+
+### 검증
+- `python -m py_compile run_agent.py`: 통과.
+- `pytest tests/run_agent/test_provider_fallback.py tests/run_agent/test_fallback_model.py -q -o addopts=`: 48 passed.
+- 실제 smoke: `_try_activate_fallback()` → `claude-code cli://claude opus`, `claude -p` 응답 `ok` 확인.
+- `hermes config check`: config version 23 정상.
+
 ## 2026-05-07 | provider fallback + protected update gate
 
 ### 작업 내용

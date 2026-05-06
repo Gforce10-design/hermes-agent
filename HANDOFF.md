@@ -3,37 +3,39 @@
 ## Current state
 
 - Branch: `main` on A8 (`A8Max`), fork/main과 크게 diverged 상태.
-- Live config changed outside repo: `/home/sudol/.hermes/config.yaml` fallback now `anthropic / claude-opus-4-6` instead of invalid `claude-code / opus4.7`.
-- Live timer script changed outside repo: `/home/sudol/.hermes/scripts/hermes-openclaw-auto-update.sh` now runs Hermes check-only and reports start/finish to Telegram; it must not run unattended `hermes update` or restart `hermes-gateway.service`.
-- Backups created:
-  - `/home/sudol/.hermes/config.yaml.bak-20260507-054340`
-  - `/home/sudol/.hermes/scripts/hermes-openclaw-auto-update.sh.bak-20260507-054340`
+- Code changed: `run_agent.py` now has a Claude CLI fallback facade for `provider: claude-code` / `claude-cli`.
+- Live config changed outside repo: `/home/sudol/.hermes/config.yaml` fallback now `[{provider: claude-code, model: opus, timeout: 300}]` so Claude fallback uses local Claude CLI OAuth, not Anthropic API.
+- Live timer script changed outside repo: `/home/sudol/.hermes/scripts/hermes-openclaw-auto-update.sh` runs Hermes check-only and reports start/finish to Telegram; it must not run unattended `hermes update` or restart `hermes-gateway.service`.
+- Latest config backups:
+  - `/home/sudol/.hermes/config.yaml.bak-disable-api-fallback-20260507-055528`
+  - `/home/sudol/.hermes/config.yaml.bak-claude-cli-fallback-20260507-060959`
 
 ## Last session work
 
-- Investigated Telegram interruption pattern around 2026-05-07 05:34 and 04:26 gateway restart.
-- Confirmed `hermes update` lacks `--no-restart`; policy corrected to automatic check/report only, manual approved update/restart.
-- Confirmed Claude Code local CLI works with `claude -p --model opus`, but Hermes `claude-code` provider currently aliases to native Anthropic API, not the CLI. Direct Anthropic fallback now avoids the invalid-model 404 but currently fails with account extra-usage HTTP 400.
-- Patched `hermes-agent` skill with this fallback pitfall.
+- Investigated repeated interruption/fallback confusion.
+- Confirmed `claude -p --model opus --output-format json` uses `claude-opus-4-7` for the logged-in Claude account.
+- Confirmed `opus4.7` and `opus4-7` are not accepted CLI model names.
+- Implemented `_ClaudeCliChatClient` / `_ClaudeCliChatCompletions` in `run_agent.py`.
+- Added fallback activation branch: `provider in {claude-code, claude-cli}` → `cli://claude`, `chat_completions`, `claude-cli-oauth`, subprocess `claude -p`.
+- Added regression test in `tests/run_agent/test_provider_fallback.py`.
+- Patched `hermes-agent` skill with the corrected Claude CLI fallback rule.
 
 ## Verification
 
-- `bash -n /home/sudol/.hermes/scripts/hermes-openclaw-auto-update.sh`: passed.
+- `python -m py_compile run_agent.py`: passed.
+- `pytest tests/run_agent/test_provider_fallback.py tests/run_agent/test_fallback_model.py -q -o addopts=`: 48 passed.
+- Smoke test: `_try_activate_fallback()` printed `Codex 응답이 끊겨 Claude Code CLI로 폴백합니다.`, activated `claude-code cli://claude opus`, and returned `ok` from Claude CLI.
 - `hermes config check`: passed, config version 23.
-- Manual script run completed:
-  - Hermes: update available, approval required before install/restart.
-  - OpenClaw: checked/updated with `--no-restart`, version remains 2026.5.6 at `97b07ea`.
-  - gateway restart: not executed.
-- `systemctl --user show hermes-gateway.service`: active/running, same start timestamp `Thu 2026-05-07 04:27:39 KST`.
+- Gateway service was not restarted during this code change, so the live Telegram gateway may need an approved service restart before this code path is active in the running daemon.
 
 ## Next tasks
 
-1. If the user wants true Claude CLI fallback, implement a separate Hermes external-process/Claude CLI fallback path instead of relying on `claude-code` provider alias.
-2. If the user approves Hermes update, run actual update and then handle gateway restart as a separate approval-gated operation.
-3. Keep automatic timer reporting enabled and verify next scheduled run message.
+1. If the user approves, perform a saved/verified `hermes-gateway.service` restart to load the new code in the live Telegram gateway.
+2. After restart, force or simulate a fallback path and confirm logs show `cli://claude` rather than `https://api.anthropic.com`.
+3. Keep automatic update check/report behavior; do not run actual `hermes update` or gateway restart without explicit approval.
 
 ## Safety boundary
 
 - No system reboot happened.
-- No `hermes-gateway.service` restart was executed during this fix.
+- No `hermes-gateway.service` restart was executed during this code implementation.
 - No G3 production service was touched.
