@@ -1,5 +1,21 @@
 # hermes-agent WORKLOG
 
+## 2026-05-06 — Master Plan v3 하위 산출물 단일 문서 흡수 정정
+
+### 작업 내용
+- 사용자 지적에 따라 별도 활성 산출물처럼 작성된 Golden Mission Packet, AI R&D Candidate Card, Control Tower UI/API read-only plan을 `Enterprise AI Organization Master Plan v3` 내부 부록 A/B/C로 흡수했다.
+- 마스터 플랜 상단에 “3개 산출물은 별도 활성 계획이 아니라 마스터 플랜 본문/부록에 흡수된 구성요소” 원칙을 명시했다.
+- 기존 별도 raw/dev 파일은 삭제/원본 overwrite 없이 참고 산출물로 격하했다.
+
+### 핵심 결정
+- 최신 단일 기준은 계속 `hermes-2026-05-06-enterprise-ai-organization-master-plan-v3.md` 하나다.
+- 구현/승인 판단은 별도 3개 문서가 아니라 마스터 플랜 v3 내장 섹션을 기준으로 한다.
+
+### 검증
+- 마스터 플랜 666 lines 확인.
+- `단일 기준 원칙`, `부록 A`, `부록 B`, `부록 C` grep 확인.
+- 코드/API/UI/cron/job/gateway/G3/DB/secrets/auth/wiki 변경 없음.
+
 ## 2026-05-06 — Alpha Workflow v3 fixtures/cards/ui read-only docs
 
 ### 작업 내용
