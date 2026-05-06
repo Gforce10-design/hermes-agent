@@ -1,5 +1,21 @@
 # hermes-agent WORKLOG
 
+## 2026-05-06 — Control Tower 3트랙 병렬 에이전트 조사
+
+### 작업 내용
+- 사용자 질문에 따라 Control Tower 1/2/3번 트랙을 별도 에이전트로 병렬 실행했다.
+- Track 1은 freshness/clean worktree gate, Track 2는 사옥 UX, Track 3은 Master Plan 구조 정리를 담당했다.
+
+### 산출물
+- Obsidian raw/dev 병렬 보고서: `hermes-2026-05-06-control-tower-parallel-tracks-report.md`
+- AlphaMate docs 산출물: `docs/control-tower-os/track-2-enterprise-ai-building-ux.md` (detached/dirty repo라 미커밋)
+
+### 검증
+- 병렬 에이전트 3개 완료.
+- AlphaMate parent/Dashboard detached+dirty 확인.
+- Hermes WORKLOG/HANDOFF save만 커밋/푸시 예정.
+- deploy/sync/restart/G3/DB/secrets/auth/cron/wiki apply 없음.
+
 ## 2026-05-06 — Control Tower 별도 구현 트랙 정정
 
 ### 작업 내용
