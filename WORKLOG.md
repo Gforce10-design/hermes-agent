@@ -1,5 +1,27 @@
 # hermes-agent WORKLOG
 
+## 2026-05-07 23:06 KST | CLI ↔ Telegram shared-memory boundary save
+
+### 작업 내용
+- 사용자의 질문에 따라 CLI Hermes와 Telegram `Dr.에르메스`의 연결/기억 공유 범위를 명확히 정리했다.
+- 결론: 같은 A8 Hermes 저장소/메모리/세션 DB/Obsidian/shared-state 표면은 공유하지만, 실시간 단일 LLM 컨텍스트를 완전히 공유하는 구조는 아니다.
+- Obsidian raw/dev save note `hermes-2026-05-07-cli-telegram-shared-memory-save.md`를 생성했다.
+
+### 핵심 결정
+- 세이브된 `HANDOFF.md`, `WORKLOG.md`, Obsidian raw/dev, shared-state는 Telegram/CLI 모두가 읽을 수 있는 공통 기준이다.
+- Telegram 현재 세션 컨텍스트에 CLI 대화가 자동 주입되는 것은 보장하지 않는다.
+- Telegram/CLI 새 세션은 저장문서 읽기 또는 “기억 다시 복구해” 요청으로 같은 기준을 복구한다.
+
+### 검증
+- 저장 전 Hermes repo 상태: `main...fork/main`, latest `5899cc61d`.
+- 저장 전 shared-state repo 상태: `feature/shared-ai-state-20260506...origin/...`, latest `c9e50ef`.
+- Obsidian save note, HANDOFF/WORKLOG, shared-state JSON/JSONL을 read-back/parse 검증 대상으로 둔다.
+
+### 안전 경계
+- Hermes gateway 서비스 재시작, 시스템 재부팅, G3/Desktop 배포, DB/secrets/auth/webhook/wiki apply 없음.
+
+---
+
 ## 2026-05-07 22:46 KST | Skill / workflow recovery audit
 
 ### 작업 내용
