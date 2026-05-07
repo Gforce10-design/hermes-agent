@@ -1,5 +1,28 @@
 # hermes-agent WORKLOG
 
+## 2026-05-07 23:35 KST | AlphaCommand PWA Control Tower benchmark plan
+
+### 작업 내용
+- Capability Router 1차/read-only 기준을 이용해 “메신저 개선”이 아니라 AlphaCommand PWA Control Tower 직행 계획을 작성했다.
+- A0~A4 범위로 v4 master plan, recovery audit, Hermes/OpenClaw capability surface를 확인했다.
+- Obsidian raw/dev 계획 문서 `hermes-2026-05-07-alphacommand-pwa-control-tower-benchmark-plan.md`를 생성했다.
+
+### 핵심 결정
+- Telegram/Slack/Discord는 보조 알림/짧은 승인 채널로 격하한다.
+- Flutter/native 중간 앱은 필수 경로가 아니며, 모바일 PWA Control Tower 직행을 기본안으로 둔다.
+- 다음 승인 후보는 이 계획을 v4 master plan appendix로 통합하는 것이다.
+
+### 검증
+- 계획 문서 read-back: 252 lines / 12281 bytes.
+- 키워드 확인: Benchmark Matrix, Mobile IA, Hermes/OpenClaw/CLI Execution Gate, Approval Boundary, Cloudflare Access, Langfuse, n8n, Capability Router.
+- 현재 Hermes repo 상태 확인: `main...fork/main`, previous latest `1b1f05275`.
+- OpenClaw gateway status 확인: loopback 127.0.0.1:18789, connectivity ok.
+
+### 안전 경계
+- 코드 구현, MCP/plugin 활성화, Hermes gateway 서비스 재시작, 시스템 재부팅, G3/Desktop 배포, DB/secrets/auth/webhook/wiki apply 없음.
+
+---
+
 ## 2026-05-07 23:06 KST | CLI ↔ Telegram shared-memory boundary save
 
 ### 작업 내용
