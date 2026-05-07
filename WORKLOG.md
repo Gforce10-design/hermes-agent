@@ -1,5 +1,25 @@
 # hermes-agent WORKLOG
 
+## 2026-05-07 | Enterprise AI v4 model routing master plan save
+
+### 작업 내용
+- `raw/dev/hermes-2026-05-07-enterprise-ai-organization-master-plan-v4.md` 생성: v3 단일 마스터 플랜에 Claude/Codex 모델 alias 기반 난이도별 라우팅 정책을 통합.
+- `raw/dev/hermes-2026-05-07-enterprise-ai-model-routing-addendum-plan.md` 추가안을 v4 본문과 Appendix V4-A로 반영.
+- v4 상단에 `0-A. v4 필수 구현 게이트 — 모델 라우팅 누락 방지` 추가.
+- `hermes-agent` skill reference와 장기 메모리에 v4 경로 및 model routing gate 저장.
+- 세이브 노트 작성: `raw/dev/hermes-2026-05-07-enterprise-ai-v4-model-routing-save.md`.
+
+### 핵심 결정
+- 최신 단일 기준은 v4 문서다. v3/final-plan 계열은 reference-only로 취급한다.
+- Enterprise AI/Control Tower/봇·프로필·팀원 구현 전 `difficulty_tier`, `model_tier`, `/do model_routing`, Claude/Codex alias 상태, fallback, cost_policy를 확인해야 한다.
+- 모델은 팀원별 고정 배치가 아니라 작업 난이도별 중앙 풀 라우팅으로 배정한다.
+
+### 검증
+- v4 read-back: 헤더와 `0-A` 구현 게이트 정상 확인.
+- 검색 검증: `Model Routing Matrix`, `model_routing`, `gpt-5.3-codex`, `Appendix V4-A` 확인.
+- 파일 크기: v4 882줄/35,150 bytes, addendum 153줄/6,151 bytes.
+- 운영 변경 없음: 서비스 재시작, 시스템 재부팅, G3 변경, paid API 추가 모두 없음.
+
 ## 2026-05-07 | Claude CLI OAuth fallback implementation
 
 ### 작업 내용
