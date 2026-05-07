@@ -1,36 +1,30 @@
 # hermes-agent HANDOFF
 
 ## 현재 상태
-- 브랜치: `main`.
-- 최신 완료 작업: OpenClaw worker trigger bridge v1 구현/검증 완료.
+- 브랜치: `hermes/capability-router-v1-20260507-rebased` on A8 (`A8Max`).
+- 최신 작업: Capability Router v1 read-only advisory tool 구현/검증 완료, fork/main 기준 재기반화 중.
+- 핵심 변경 파일:
+  - `tools/capability_router_tool.py`
+  - `tests/tools/test_capability_router_tool.py`
+  - `WORKLOG.md`
+  - `HANDOFF.md`
 - Hermes gateway live config에는 `Dr.에르메스` 수동 DM topic이 이미 생성되어 있고 `thread_id=51117`이다.
-- OpenClaw bridge는 read-only 도구에 더해 `openclaw_worker_trigger` v1까지 구현/검증됐다. 저장 커밋은 본 세션 커밋 참조.
-
-## 마지막 세션 작업
-- `gateway/platforms/telegram.py`에 unknown Telegram DM topic runtime auto-register를 추가했다.
-- unknown DM topic은 `topic <thread_id>` fallback 이름으로 등록되고 `auto_registered=True`로 표시된다.
-- explicit operator config/hot-load topic binding이 runtime fallback cache보다 우선하도록 `_get_dm_topic_info()` 흐름을 조정했다.
-- `gateway/config.py`에서 top-level `telegram.auto_register_dm_topics`를 `platforms.telegram.extra`로 bridge했다.
-- `tests/gateway/test_telegram_thread_fallback.py`에 auto-register, disable, hot-load override 회귀 테스트를 추가했다.
+- OpenClaw bridge는 read-only 도구와 `openclaw_worker_trigger` v1까지 구현/검증된 상태다.
 
 ## 검증
-- `tests/gateway/test_telegram_thread_fallback.py`: `13 passed`.
-- `tests/plugins/test_openclaw_bridge_plugin.py`: `10 passed`.
-- `py_compile`: `gateway/platforms/telegram.py`, `gateway/config.py`, `tests/gateway/test_telegram_thread_fallback.py` 통과.
-- `git diff --check` 통과.
-- `hermes config check` 통과.
-- 독립 코드 리뷰: Critical/Important 없음.
-
-## 관련 산출물
-- 계획: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-05-telegram-auto-topic-session-plan.md`
-- 세이브: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-06-telegram-auto-topic-session-save.md`
-- Dr.에르메스 수동 topic 계획: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-05-telegram-dr-hermes-topic-plan.md`
+- RED: 신규 모듈 없음으로 `ModuleNotFoundError` 확인.
+- Targeted tests: `python -m pytest tests/tools/test_capability_router_tool.py -q -o 'addopts='` → 13 passed.
+- Compile: `python -m py_compile tools/capability_router_tool.py` 통과.
+- Tool discovery: `capability_route` auto-discovered and registered under `skills` toolset.
+- Independent final review: PASS; no config writes, subprocess/network execution, gateway restart, MCP/plugin activation, deploy, or external send; secret-like requests redacted and raw request echo removed.
 
 ## 다음 작업
-- live Hermes gateway 서비스를 재시작해 새 코드 반영.
-- 새 Telegram DM topic에서 메시지 수신 시 세션 생성/응답을 확인.
+1. fork/main 위 재기반화 커밋을 완료하고 `hermes/capability-router-v1-20260507` 원격 브랜치를 갱신한다.
+2. PR #1 mergeability를 재확인한다.
+3. 이 기능을 `/work` 또는 Control Tower packet surface에 연결하는 작업은 별도 A0→A8 승인 후 진행한다.
 
-## 알려진 이슈 / 주의
-- 서비스 재시작은 Hermes gateway 프로세스 재시작이며 시스템 재부팅이 아니다.
-- OpenClaw bridge는 worker trigger v1까지 포함하지만 live dispatch/서비스 재시작/비제한 shell은 여전히 차단된다.
-- GitHub 토큰/Telegram 토큰/비밀값은 저장하지 않았다.
+## 안전 경계
+- Hermes gateway/service 재시작 없음.
+- G3/Desktop/production sync 또는 deploy 없음.
+- MCP server/plugin 활성화 없음.
+- DB/secrets/auth/webhook/external send 없음.

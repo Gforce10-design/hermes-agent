@@ -1,6 +1,27 @@
 # hermes-agent WORKLOG
 
+## 2026-05-07 | Capability Router v1 read-only tool
 
+### 작업 내용
+- Alpha Workflow를 아이디어/문제정의부터 A0~A4까지 재실행해 Obsidian 계획 `raw/dev/hermes-2026-05-07-skill-capability-router-v1-plan.md`에 기록.
+- `tools/capability_router_tool.py` 추가: `capability_route` read-only advisory tool을 `skills` toolset에 등록.
+- `tests/tools/test_capability_router_tool.py` 추가: skill/tool 추천, MCP/skill/plugin creation gates, advisory-only, source evidence, secret-like request summary/no-echo 및 redaction 회귀 테스트.
+- 독립 리뷰에서 secret-like request echo blocker 2회 발견 후 `token/cookie/api key/sk/ghp/github_pat/Bearer/xoxb` 계열 마스킹을 보강.
+
+### 검증
+- RED: 신규 모듈 없음으로 `ModuleNotFoundError` 확인.
+- GREEN: `python -m pytest tests/tools/test_capability_router_tool.py -q -o 'addopts='` → 13 passed.
+- `python -m py_compile tools/capability_router_tool.py` 통과.
+- tool discovery 확인: `tools.capability_router_tool` auto-discovery, `capability_route` registry entry, `skills` toolset 노출.
+- 독립 최종 리뷰 PASS: advisory/read-only, 요청 원문 echo 없음 및 secret-like 입력 원문 누출 없음, subprocess/network/config write/restart/deploy/send 실행 경로 없음.
+
+### 안전 경계
+- Gateway 재시작 없음.
+- MCP/plugin 활성화 없음.
+- DB/secrets/auth/webhook/external send 없음.
+- 배포/G3 sync 없음.
+
+---
 ## [2026-05-06 02:10 KST] implement | OpenClaw worker trigger bridge v1
 
 ### 작업 내용
