@@ -1,5 +1,21 @@
 # hermes-agent WORKLOG
 
+## 2026-05-08 04:48 KST | OpenClaw/Hermes A6 natural validation correction
+
+### 작업 내용
+- 이전 세이브의 `03:28 자연 검증 재발 없음` 판정을 정정.
+- journalctl 기준 03:29:14, 03:58:50, 04:28:38 KST에 `No API key found`/`lane task error`/`Embedded agent failed` 재발 확인.
+- 후보 1은 소스/테스트/커밋/푸시는 완료됐지만 운영 30분 tick 차단은 미작동/부분 작동으로 재분류.
+
+### 검증
+- 조회 범위: `journalctl --user -u openclaw-gateway.service --since '2026-05-08 03:20:00' --until '2026-05-08 07:10:00'`.
+- 확인된 재발 PID: 24552(03:29), 26793(03:58/04:28).
+- 서비스 상태: `openclaw-gateway.service` active/running, MainPID 26793, start 03:36:09 KST.
+
+### 다음
+- 우선순위 2: 후보 1 진짜 30분 tick 진입 경로 진단.
+- 우선순위 3: 재구현 또는 v2 audit 결정은 사용자 결정 필요.
+
 ## 2026-05-08 03:59 KST | OpenClaw/Hermes normalization A6 implementation
 
 ### 작업 내용
@@ -17,7 +33,7 @@
 - OpenClaw targeted tests 11 passed.
 - Hermes plugin tests 17 passed.
 - OpenClaw dist build exit 0, gateway service restarted once and PID 26793/probe ok 확인.
-- 03:28 자연 검증: auth 실패/lane error 재발 없음.
+- 03:28 자연 검증 판정 정정: 03:29:14, 03:58:50, 04:28:38에 auth 실패/lane error 재발. 후보 1 운영 차단은 미작동/부분 작동.
 - 최종 독립 리뷰 passed.
 
 ### 안전 경계

@@ -1,37 +1,32 @@
-# hermes-agent HANDOFF
+# Hermes Agent Handoff
+
+updated: 2026-05-08 04:48:54 KST
+branch: main
+source: CLI Hermes A8Max
 
 ## 현재 상태
-- 머신/인터페이스: A8Max WSL, CLI Hermes.
-- Hermes repo branch: `main` at pre-save `1065ad5d6` plus current save edits.
-- OpenClaw repo branch: `main` at pre-save `97b07eaeaf` plus current A6 edits.
-- 작업: OpenClaw/Hermes 정상화 A6 구현 완료, A7/A8 저장 진행 중.
+- 우선순위 1 영구 기록 정정 진행 중/완료 대상: A6 결과 문서, Hermes WORKLOG/HANDOFF, Obsidian raw/dev save note, shared-state status/events.
+- 후보 1(OpenClaw 30분 auth 실패 차단): 소스/테스트/커밋/푸시는 완료됐지만 운영 자연 검증 실패/부분 작동.
+- 후보 2(Hermes→OpenClaw bridge audit): 소스/테스트/커밋/푸시 완료, plugin tests 기준 audit jsonl 작동.
 
-## 저장된 기준
-- A6 result: `/home/sudol/.hermes/sessions/handoff/2026-05-08-A6-result.md`
-- Obsidian save note: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-08-openclaw-normalization-a6-save.md`
-- OpenClaw runtime: `openclaw-gateway.service`, PID 26793 after restart, `127.0.0.1:18789`, probe ok.
+## A6 구현 커밋
+- OpenClaw: `5dfb5d1cbd fix: guard cron agents with empty auth profiles` pushed to `Gforce10-design/openclaw main`.
+- Hermes: `e7fa3a406 fix: audit OpenClaw bridge calls` pushed to `Gforce10-design/hermes-agent main`.
+- Shared-state 이전 save: `01c2b1c docs: record OpenClaw Hermes A6 save` pushed; 이번 정정은 별도 follow-up commit 대상.
 
-## 구현 결과
-- 후보 1 auth 차단/격리: OpenClaw autonomous cron agent가 빈 `auth-profiles.json` profiles {} 상태에서 `disabled due to missing auth`로 skip.
-- 후보 2 bridge audit: Hermes `openclaw_status`, `openclaw_cli`, `openclaw_worker_trigger` plugin handlers가 최소 audit jsonl 기록. append 실패 시 `audit_error` 반환.
+## 자연 검증 정정
+- 이전 문서의 `03:28 자연 검증 재발 없음` 판정은 오판.
+- 03:29:14 KST: `No API key found`, `lane task error`(lane=main, lane=session:agent:main:main), `model fallback decision`, `Embedded agent failed before reply` 재발. PID 24552.
+- 03:58:50 KST: 동일 패턴 재발. PID 26793.
+- 04:28:38 KST: 동일 패턴 재발. PID 26793.
+- 04:58 이후 tick은 이 HANDOFF 작성 시각 기준 아직 미도래/미검증.
 
-## 검증
-- OpenClaw targeted tests 11 passed.
-- Hermes plugin tests 17 passed.
-- OpenClaw build exit 0.
-- Gateway status: running/probe ok/admin-capable.
-- 03:28 자연 검증: 기존 30분 auth failure 로그 재발 없음.
-- 최종 independent review: passed, no blocking issues.
+## 다음 우선순위
+1. 이 정정 커밋/푸시 및 read-back 검증 마무리.
+2. 후보 1 진짜 30분 tick 진입 경로 진단: 로그 발생 위치(`lane=main`, `lane=session:agent:main:main`) 추적.
+3. 후보 1 재구현 또는 v2 audit 결정은 사용자 결정 필요.
 
-## 미완 / 다음 작업
-- 03:58/04:28 tick 추가 관찰 결과를 후속 반영.
-- 현재 대화 내장 OpenClaw developer tool은 수정한 Hermes plugin과 별도 런타임으로 보여 현재 세션 실시간 audit은 부분 검증.
-- 다음 Hermes plugin reload/세션에서 `~/.openclaw/audit/hermes-bridge.jsonl` 실제 호출 기록 확인.
-- OpenClaw 직접 실행 경로 헌법 사각지대, 9필드 풀 수집, shared-state matrix 복구는 v2 audit/후속 작업.
-
-## 안전 경계
-- 시스템 재부팅 없음.
-- G3/D: 접근 없음.
-- DB/secrets/auth 파일 직접 수정 없음.
-- webhook/wiki apply 없음.
-- OpenClaw gateway 서비스 재시작 1회만 수행; Hermes gateway/console 재시작 없음.
+## 경계
+- 이번 정정은 문서/상태 정정만 수행.
+- G3/D: 접근 없음, 시스템 재부팅 없음, DB/secrets/auth 파일 직접 수정 없음, webhook/wiki apply 없음.
+- OpenClaw gateway 서비스 재시작/재배포는 수행하지 않음.
