@@ -1,5 +1,26 @@
 # hermes-agent WORKLOG
 
+## 2026-05-08 06:33:13 KST | 우선순위 3-2 진단 및 deferred findings save
+
+### 작업 내용
+- OpenClaw `agent:main:main` embedded lane 진입 경로 추적 결과를 영구 저장했다.
+- A6 guard가 cron isolated 경로에만 적용되고 heartbeat embedded 경로는 통과하지 않는 분기점을 확인했다.
+- 옵션 B 후속 자연 검증 중 새 HTTP 400 모델 불일치 발견(`gpt-5.2-codex`)을 deferred findings로 별도 저장했다.
+- Claude에게 넘길 현재 상황 요약문을 작성했다.
+
+### 핵심 결정
+- 3-3/3-4 구현은 사용자 승인 전 자율 진행하지 않는다.
+- 옵션 B의 temperature 거부 차단은 성공으로 보되, auxiliary 모델 불일치 문제는 별도 진단 대상으로 분리한다.
+- OpenClaw 차단 방향 권장은 기존 A6 helper 재사용 + heartbeat embedded enqueue 직전 차단 후보다.
+
+### 검증
+- 진단 파일 read-back: `/home/sudol/.hermes/sessions/handoff/2026-05-08-priority3-step2-diagnosis.md`.
+- deferred findings read-back: `/home/sudol/.hermes/sessions/handoff/2026-05-08-priority3-step2-deferred-findings.md`.
+- OpenClaw repo는 진단 중 코드 수정 없음으로 확인.
+
+### 안전 경계
+- 코드 구현, 서비스 재시작, 시스템 재부팅, G3/Desktop deploy, DB/secrets/auth/webhook/wiki apply 없음.
+
 ## 2026-05-08 04:48 KST | OpenClaw/Hermes A6 natural validation correction
 
 ### 작업 내용
