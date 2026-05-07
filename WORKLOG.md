@@ -1,5 +1,28 @@
 # hermes-agent WORKLOG
 
+## 2026-05-08 02:55:01 KST | OpenClaw/Hermes constitution save and diagnosis handoff
+
+### 작업 내용
+- A 단계 헌법 저장을 작성/저장/검증 층위에서 마쳤다.
+- B 단계 OpenClaw + Hermes 정상 협업 진단을 수행했다.
+- 세션 압축/종료를 위해 `~/.hermes/sessions/handoff/2026-05-08-A-pending.md`와 Obsidian raw/dev save note를 작성했다.
+- 사용자 결정: 옵션 A 정상화 재설계 풀 진행, 새벽 6시 마감 목표. 다음 세션은 A0부터 시작한다.
+
+### 핵심 결정
+- OpenClaw 제거가 아니라 정상 협업 재설계가 다음 방향이다.
+- B 진단 결과는 다음 세션 A0 입력값이다.
+- 운영 런타임 강제 적용, Claude Code/Codex 주입, v2 audit 항목은 미완이다.
+
+### 검증
+- OpenClaw gateway: running, PID 276, `127.0.0.1:18789`, admin-capable.
+- Hermes bridge: `openclaw-bridge` enabled `0.4.0`.
+- USER.md 61줄과 헌법 SKILL.md 로드 검증은 A.4에서 확인했다.
+
+### 안전 경계
+- OpenClaw 제거/차단/비활성화, 새 코드 작성, 서비스 재시작, 시스템 재부팅, G3/D: 접근, DB/secrets/auth/webhook/wiki apply 없음.
+
+---
+
 ## 2026-05-08 02:14 KST | Hermes Operating Constitution v1 approved save
 
 ### 작업 내용
