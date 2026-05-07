@@ -8074,19 +8074,20 @@ class AIAgent:
                 response = None
 
             if not _aux_available and self.api_mode == "codex_responses":
-                # No auxiliary client -- use the Codex Responses path directly
+                # No auxiliary client -- use the Codex Responses path directly.
+                # Keep this fallback aligned with CodexAuxiliaryClient: the
+                # chatgpt.com/backend-api/codex Responses endpoint rejects
+                # sampling and output-cap params such as temperature and
+                # max_output_tokens, so do not re-add them here after the
+                # auxiliary adapter path has failed.
                 codex_kwargs = self._build_api_kwargs(api_messages)
                 _ct_flush = self._get_transport()
                 if _ct_flush is not None:
                     codex_kwargs["tools"] = _ct_flush.convert_tools([memory_tool_def])
                 elif not codex_kwargs.get("tools"):
                     codex_kwargs["tools"] = [memory_tool_def]
-                if _flush_temperature is not None:
-                    codex_kwargs["temperature"] = _flush_temperature
-                else:
-                    codex_kwargs.pop("temperature", None)
-                if "max_output_tokens" in codex_kwargs:
-                    codex_kwargs["max_output_tokens"] = 5120
+                codex_kwargs.pop("temperature", None)
+                codex_kwargs.pop("max_output_tokens", None)
                 response = self._run_codex_stream(codex_kwargs)
             elif not _aux_available and self.api_mode == "anthropic_messages":
                 # Native Anthropic — use the transport for kwargs

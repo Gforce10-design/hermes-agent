@@ -327,3 +327,95 @@ class TestFlushMemoriesCodexFallback:
         mock_stream.assert_called_once()
         mock_memory.assert_called_once()
         assert mock_memory.call_args.kwargs["content"] == "Codex flush test"
+
+    def test_codex_fallback_omits_temperature(self, monkeypatch):
+        agent = _make_agent(monkeypatch, api_mode="codex_responses", provider="openai-codex")
+        captured_kwargs = {}
+        codex_response = SimpleNamespace(output=[], usage=None, status="completed", model="gpt-5-codex")
+
+        def capture_stream(kwargs):
+            captured_kwargs.update(kwargs)
+            return codex_response
+
+        with patch("agent.auxiliary_client.call_llm", side_effect=RuntimeError("forced aux failure")), \
+             patch.object(agent, "_run_codex_stream", side_effect=capture_stream) as mock_stream, \
+             patch.object(agent, "_build_api_kwargs") as mock_build:
+            mock_build.return_value = {
+                "model": "gpt-5-codex",
+                "instructions": "test",
+                "input": [],
+                "tools": [],
+                "temperature": 0.3,
+                "max_output_tokens": 4096,
+            }
+            messages = [
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi"},
+                {"role": "user", "content": "Save this"},
+            ]
+            agent.flush_memories(messages)
+
+        mock_stream.assert_called_once()
+        assert "temperature" not in captured_kwargs
+
+    def test_codex_fallback_omits_max_output_tokens(self, monkeypatch):
+        agent = _make_agent(monkeypatch, api_mode="codex_responses", provider="openai-codex")
+        captured_kwargs = {}
+        codex_response = SimpleNamespace(output=[], usage=None, status="completed", model="gpt-5-codex")
+
+        def capture_stream(kwargs):
+            captured_kwargs.update(kwargs)
+            return codex_response
+
+        with patch("agent.auxiliary_client.call_llm", side_effect=RuntimeError("forced aux failure")), \
+             patch.object(agent, "_run_codex_stream", side_effect=capture_stream) as mock_stream, \
+             patch.object(agent, "_build_api_kwargs") as mock_build:
+            mock_build.return_value = {
+                "model": "gpt-5-codex",
+                "instructions": "test",
+                "input": [],
+                "tools": [],
+                "temperature": 0.3,
+                "max_output_tokens": 4096,
+            }
+            messages = [
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi"},
+                {"role": "user", "content": "Save this"},
+            ]
+            agent.flush_memories(messages)
+
+        mock_stream.assert_called_once()
+        assert "max_output_tokens" not in captured_kwargs
+
+    def test_codex_fallback_preserves_supported_response_fields(self, monkeypatch):
+        agent = _make_agent(monkeypatch, api_mode="codex_responses", provider="openai-codex")
+        captured_kwargs = {}
+        codex_response = SimpleNamespace(output=[], usage=None, status="completed", model="gpt-5-codex")
+
+        def capture_stream(kwargs):
+            captured_kwargs.update(kwargs)
+            return codex_response
+
+        with patch("agent.auxiliary_client.call_llm", side_effect=RuntimeError("forced aux failure")), \
+             patch.object(agent, "_run_codex_stream", side_effect=capture_stream), \
+             patch.object(agent, "_build_api_kwargs") as mock_build:
+            mock_build.return_value = {
+                "model": "gpt-5-codex",
+                "instructions": "test instructions",
+                "input": [{"role": "user", "content": "test input"}],
+                "tools": [],
+                "temperature": 0.3,
+                "max_output_tokens": 4096,
+            }
+            messages = [
+                {"role": "user", "content": "Hello"},
+                {"role": "assistant", "content": "Hi"},
+                {"role": "user", "content": "Save this"},
+            ]
+            agent.flush_memories(messages)
+
+        assert captured_kwargs["model"] == "gpt-5-codex"
+        assert captured_kwargs["instructions"] == "test instructions"
+        assert captured_kwargs["input"] == [{"role": "user", "content": "test input"}]
+        assert "tools" in captured_kwargs
