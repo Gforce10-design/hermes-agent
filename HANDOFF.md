@@ -4,43 +4,37 @@
 - 머신/인터페이스: A8Max WSL, Telegram DM `Dr.에르메스`.
 - 브랜치: `main` tracking `fork/main`.
 - 최신 repo commit: 이 HANDOFF 포함 세이브 커밋은 `git log -1 --oneline` 기준으로 확인한다.
-- 이번 작업: Hermes gateway restart drain/recovery fix 구현 완료.
-- 핵심 변경 파일:
-  - `gateway/run.py`
-  - `tests/gateway/test_restart_drain.py`
-  - `tests/gateway/restart_test_helpers.py`
-  - `WORKLOG.md`
-  - `HANDOFF.md`
+- 이번 작업: 최근 며칠 대화 기억 경계선 복구 기준선 작성 완료.
+- 기준선 문서: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-07-memory-boundary-recovery-baseline.md`.
 
-## 구현 요약
-- 활성 실제 agent가 있는 동안 `request_restart()`는 즉시 `stop()`을 실행하지 않고 `_restart_deferred_until_idle=True`로 전환한다.
-- 마지막 실제 agent가 `_release_running_agent_state()`로 해제되면 저장된 restart 옵션으로 실제 restart task를 시작한다.
-- `_running_agent_count()`는 `_AGENT_PENDING_SENTINEL`을 제외한 실제 agent만 센다.
-- `_drain_active_agents()`와 timeout 후 post-interrupt wait도 실제 agent 기준으로 동작한다.
-- deferred restart가 실제 시작될 때 `.restart_last_processed.json`의 `requested_at`을 갱신해 오래 대기한 `/restart` redelivery loop를 줄인다.
+## 기억 경계선 결론
+- 영구 메모리 전체가 완전히 롤백된 증거는 없다.
+- 그러나 Hermes gateway restart/drain interrupt + context compression 이후 최근 Telegram 활성 문맥의 순서/토픽 구분이 크게 손상되었다.
+- 앞으로 최근 며칠 맥락이 필요한 질문에는 `session_search` + HANDOFF/WORKLOG/shared-state/Obsidian 기준선을 먼저 확인한다.
+
+## 최근 핵심 기준
+- Gateway restart drain fix: 구현/검증/저장 완료. live gateway 서비스 재시작은 아직 안 함.
+- Enterprise AI Organization: 최신 단일 기준은 `hermes-2026-05-07-enterprise-ai-organization-master-plan-v4.md`; model routing gate 필수.
+- AlphaNexus/AlphaCommand Mission Intake: 최신 활성 기준은 `hermes-2026-05-07-alphanexus-mission-intake-routing-packet-light-spec-v3.md`.
+- Workflow omission correction: `/work`/`/do`는 고정 루프가 아니라 routing/execution surface 후보로 취급.
+- Control Tower clean continuation lane: `/mnt/c/Users/sudol/Vibe Coding/AlphaMate-worktrees/control-tower-enterprise-building-20260506`; 원본 detached AlphaMate checkout은 직접 편집하지 않는다.
 
 ## 검증
-- `python -m pytest tests/gateway/test_restart_drain.py -q` → 19 passed.
-- `python -m py_compile gateway/run.py tests/gateway/test_restart_drain.py tests/gateway/restart_test_helpers.py` → pass.
-- `git diff --check` → pass.
-- `python -m pytest tests/gateway/test_restart_drain.py tests/gateway/test_run_progress_topics.py -q` → 47 passed.
-- static secret/shell/eval/pickle scan → no hits.
-- 독립 xrev 최종 리뷰 → PASS.
-
-## 관련 산출물
-- 계획: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-07-gateway-restart-drain-recovery-plan.md`
-- 세이브: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-07-gateway-restart-drain-recovery-save.md`
+- `session_search`로 gateway drain, Enterprise AI v4/model routing, OpenClaw/shared-state/Control Tower, Codex/Claude fallback 트랙 확인.
+- 기준선 문서 read-back 확인.
+- 기준선 문서 `wc -l -c` → 145 lines / 9175 bytes.
+- Hermes gateway 현재 상태: active/running, PID 275, start `2026-05-07 21:06:45 KST`.
 
 ## 다음 작업
-1. 라이브 반영을 원하면 별도 승인 후 Hermes gateway **서비스 재시작**을 수행한다. 시스템 재부팅이 아니다.
-2. 재시작 전 active Telegram/agent 작업이 없는지 다시 확인한다.
-3. Desktop/G3에서 이어갈 경우 pull-needed 상태로 보고, 배포/서비스 재시작은 별도 승인 후 진행한다.
+1. 사용자가 “이어가”라고 하면 먼저 기준선 문서를 읽고 해당 트랙을 선택한다.
+2. AlphaNexus/Enterprise AI 구현은 v4 + Light Spec v3 gate 확인 전 시작하지 않는다.
+3. Gateway live 반영은 별도 승인 후 Hermes gateway **서비스 재시작**으로 진행한다. 시스템 재부팅이 아니다.
 
 ## Cross-runtime / machine sync
-- 이 작업은 Telegram DM에서 시작되어 A8 WSL repo에 구현되었다.
-- Shared-state sync: `/home/sudol/worktrees/vibecoding-shared-state-20260506` commit shared-state repo `git log -1 --oneline` 기준 최신 sync commit pushed to `origin/feature/shared-ai-state-20260506`.
-- Desktop/G3에는 배포하지 않았고, 필요 시 pull-needed 상태로 다룬다.
+- 이 복구 기준선은 Telegram DM에서 시작되어 Obsidian raw/dev와 Hermes HANDOFF/WORKLOG에 기록된다.
+- Shared-state repo는 별도 commit으로 최신 기준선을 반영한다. 정확한 shared-state commit은 해당 repo `git log -1 --oneline` 기준으로 확인한다.
+- Desktop/G3는 pull-needed 상태로만 취급하며 배포/서비스 재시작은 하지 않았다.
 
 ## 안전 경계
-- Hermes gateway 서비스 재시작은 아직 수행하지 않았다.
+- Hermes gateway 서비스 재시작 없음.
 - 시스템 재부팅, G3/Desktop 배포, DB/secrets/auth/webhook 변경 없음.

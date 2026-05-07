@@ -1,5 +1,23 @@
 # hermes-agent WORKLOG
 
+## 2026-05-07 22:14 KST | Memory boundary recovery baseline
+
+### 작업 내용
+- 사용자가 지적한 최근 며칠 대화 기억 단절 문제를 session_search, Hermes HANDOFF/WORKLOG, shared-state, Obsidian raw/dev 기준으로 재구성했다.
+- 영구 메모리 전체 롤백 증거는 없지만, gateway restart/drain interrupt + context compression 이후 최근 Telegram 활성 문맥의 순서/토픽 구분이 손상된 것으로 경계선을 정의했다.
+- Obsidian raw/dev에 `hermes-2026-05-07-memory-boundary-recovery-baseline.md` 기준선을 작성했다.
+
+### 검증
+- 최근 세션 검색: gateway drain, Enterprise AI v4/model routing, OpenClaw/shared-state/Control Tower, Codex/Claude fallback 트랙 확인.
+- Hermes repo 상태 확인: `main...fork/main`, latest `eef0c86f8`.
+- Shared-state repo 상태 확인: `feature/shared-ai-state-20260506...origin/...`, latest `f215fd7`.
+- 기준선 문서 read-back + `wc -l -c` → 145 lines / 9175 bytes.
+
+### 안전 경계
+- 서비스 재시작, 시스템 재부팅, G3/Desktop 배포, DB/secrets/auth/webhook 변경 없음.
+
+---
+
 ## 2026-05-07 21:43 KST | Gateway restart drain deferral fix
 
 ### 작업 내용
