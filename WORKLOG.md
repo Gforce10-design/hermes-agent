@@ -1,5 +1,29 @@
 # hermes-agent WORKLOG
 
+## 2026-05-07 21:43 KST | Gateway restart drain deferral fix
+
+### 작업 내용
+- Telegram 작업 중 `/restart`/gateway self-restart가 활성 agent를 즉시 stop/interrupt하지 않도록 deferred restart 경로를 구현했다.
+- `_running_agent_count()`를 pending sentinel 제외 기준으로 통일하고, drain/post-interrupt loop도 실제 agent 기준으로 판단하게 수정했다.
+- deferred restart가 오래 대기한 뒤 실제 시작될 때 Telegram `/restart` redelivery dedup marker timestamp를 갱신하도록 보강했다.
+- 회귀 테스트 4개를 추가했다: active agent deferral, pending sentinel command/drain 무시, dedup marker refresh.
+
+### 검증
+- TDD RED/GREEN: 신규 deferral 테스트 작성 후 구현.
+- `python -m pytest tests/gateway/test_restart_drain.py -q` → 19 passed.
+- `python -m py_compile gateway/run.py tests/gateway/test_restart_drain.py tests/gateway/restart_test_helpers.py` 통과.
+- `git diff --check` 통과.
+- `python -m pytest tests/gateway/test_restart_drain.py tests/gateway/test_run_progress_topics.py -q` → 47 passed.
+- static secret/shell/eval/pickle scan → no hits.
+- 독립 xrev 최종 리뷰 → PASS.
+- Shared-state sync: `192492d docs: sync Hermes gateway restart recovery state` pushed to `origin/feature/shared-ai-state-20260506`.
+
+### 안전 경계
+- 이 구현/검증 중 Hermes gateway 서비스 재시작은 수행하지 않았다.
+- 시스템 재부팅, G3/Desktop 배포, DB/secrets/auth/webhook 변경 없음.
+
+---
+
 ## 2026-05-07 20:51 KST | A8 reboot-prep handoff correction save
 
 ### 작업 내용
