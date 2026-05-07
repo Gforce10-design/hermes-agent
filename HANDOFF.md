@@ -3,7 +3,7 @@
 ## Current state
 
 - Branch: `main` on A8 (`A8Max`), fork/main과 크게 diverged 상태.
-- Save commit: `a3c73a490` (`docs: save enterprise ai v4 model routing`). `fork/main` push was rejected as non-fast-forward, so the save was preserved on backup branch `fork/hermes/save-enterprise-ai-v4-model-routing-20260507-093020`.
+- Save commit baseline: `a3c73a490` (`docs: save enterprise ai v4 model routing`). `fork/main` push was rejected as non-fast-forward, so the save is preserved on backup branch `fork/hermes/save-enterprise-ai-v4-model-routing-20260507-093020`; use `git log -1` / `git ls-remote` for the latest branch tip.
 - Latest authoritative Enterprise AI Organization plan: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-07-enterprise-ai-organization-master-plan-v4.md`.
 - V4 includes the model-routing implementation gate: `difficulty_tier`, `model_tier`, `/do model_routing`, Claude/Codex alias capability status, fallback, and cost policy.
 - Related addendum: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-07-enterprise-ai-model-routing-addendum-plan.md`.
