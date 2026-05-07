@@ -32,9 +32,9 @@
 - 세이브: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-07-gateway-restart-drain-recovery-save.md`
 
 ## 다음 작업
-1. 이 커밋을 `fork/main`에 push한 뒤 final git 상태를 확인한다.
-2. 라이브 반영을 원하면 별도 승인 후 Hermes gateway **서비스 재시작**을 수행한다. 시스템 재부팅이 아니다.
-3. 재시작 전 active Telegram/agent 작업이 없는지 다시 확인한다.
+1. 라이브 반영을 원하면 별도 승인 후 Hermes gateway **서비스 재시작**을 수행한다. 시스템 재부팅이 아니다.
+2. 재시작 전 active Telegram/agent 작업이 없는지 다시 확인한다.
+3. Desktop/G3에서 이어갈 경우 pull-needed 상태로 보고, 배포/서비스 재시작은 별도 승인 후 진행한다.
 
 ## Cross-runtime / machine sync
 - 이 작업은 Telegram DM에서 시작되어 A8 WSL repo에 구현되었다.
