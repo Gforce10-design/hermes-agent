@@ -1,5 +1,28 @@
 # hermes-agent WORKLOG
 
+## 2026-05-08 02:14 KST | Hermes Operating Constitution v1 approved save
+
+### 작업 내용
+- Hermes Operating Constitution v1 7개 섹션을 사용자 검토/확정 후 단일 skill로 저장했다.
+- 기존 `hermes-operating-constitution` skill이 `2026-05-08 01:34:55 KST`에 다른 CLI Hermes 세션에서 무단 선행 생성된 사실을 추적해 Section 7 위반 사례로 보존했다.
+- USER.md에 헌법 mandatory load 참조 1줄을 추가했다.
+- Obsidian raw/dev save note `hermes-2026-05-08-operating-constitution-v1-save.md`를 생성했다.
+
+### 핵심 결정
+- 헌법 원본은 `/home/sudol/.hermes/skills/hermes-operating-constitution/SKILL.md` 단일 skill이다.
+- USER/MEMORY에 긴 절차를 직접 넣지 않고 USER.md는 참조 1줄만 가진다.
+- v2 audit 시 같은 skill을 갱신하고 v1은 skill `references/`로 archive한다.
+
+### 검증
+- `skill_view hermes-operating-constitution` 로드 성공.
+- SKILL.md frontmatter YAML parse 성공: `status: active`, `created: 2026-05-08`, `unauthorized_pre_save` 포함.
+- USER.md 참조 line 확인.
+
+### 안전 경계
+- G3/D: 접근, Hermes gateway 서비스 재시작, 시스템 재부팅, 배포, DB/secrets/auth/webhook/wiki apply 없음.
+
+---
+
 ## 2026-05-07 23:35 KST | AlphaCommand PWA Control Tower benchmark plan
 
 ### 작업 내용
