@@ -4,37 +4,38 @@
 - 머신/인터페이스: A8Max WSL, Telegram DM `Dr.에르메스`.
 - 브랜치: `main` tracking `fork/main`.
 - 최신 repo commit: 이 HANDOFF 포함 세이브 커밋은 `git log -1 --oneline` 기준으로 확인한다.
-- 이번 작업: 최근 며칠 대화 기억 경계선 복구 기준선 작성 완료.
-- 기준선 문서: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-07-memory-boundary-recovery-baseline.md`.
+- 이번 작업: 최근 기억 경계선에서 빠졌던 **스킬 주입 / 워크플로우 재구성 / 작업별 스킬 조합 / capability surface** 축을 복구했다.
+- 복구 audit 문서: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-07-skill-workflow-recovery-audit.md`.
+- 이전 기준선 문서: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-07-memory-boundary-recovery-baseline.md`.
 
-## 기억 경계선 결론
-- 영구 메모리 전체가 완전히 롤백된 증거는 없다.
-- 그러나 Hermes gateway restart/drain interrupt + context compression 이후 최근 Telegram 활성 문맥의 순서/토픽 구분이 크게 손상되었다.
-- 앞으로 최근 며칠 맥락이 필요한 질문에는 `session_search` + HANDOFF/WORKLOG/shared-state/Obsidian 기준선을 먼저 확인한다.
+## 복구된 핵심 기준
+- Source skill injection plan: `hermes-2026-05-07-claude-codex-source-skill-injection-plan.md`.
+- Alpha Workflow umbrella: `tri-tool-ddd-ai-workflow`.
+- Raw mirror root: `tri-tool-ddd-ai-workflow/references/source-skills-raw-2026-05-07/`.
+- Claude/Codex mirror index: `references/source-skills-raw-2026-05-07/claude-codex/INDEX.md`.
+- Mirror counts: mirrored 1120, skipped 0, missing_roots 0, redacted 55, mirrored_support 374.
+- Operational rule: SKILL.md 존재만이 아니라 support scripts/configs/templates, trigger, runtime, approval gate, verification까지 보아야 한다.
+- Sensitive-looking markdown filenames(`cookie/session/token`)은 실제 credential store가 아니면 inline redaction 후 포함한다.
 
-## 최근 핵심 기준
-- Gateway restart drain fix: 구현/검증/저장 완료. live gateway 서비스 재시작은 아직 안 함.
-- Enterprise AI Organization: 최신 단일 기준은 `hermes-2026-05-07-enterprise-ai-organization-master-plan-v4.md`; model routing gate 필수.
-- AlphaNexus/AlphaCommand Mission Intake: 최신 활성 기준은 `hermes-2026-05-07-alphanexus-mission-intake-routing-packet-light-spec-v3.md`.
-- Workflow omission correction: `/work`/`/do`는 고정 루프가 아니라 routing/execution surface 후보로 취급.
-- Control Tower clean continuation lane: `/mnt/c/Users/sudol/Vibe Coding/AlphaMate-worktrees/control-tower-enterprise-building-20260506`; 원본 detached AlphaMate checkout은 직접 편집하지 않는다.
+## Alpha Workflow 적용 기준
+- A0 source + decision-state gate → A1 DDD/domain language → A2 Grill Me/Office Hours → A3 Light Spec → A4 TDD plan → A5 approval boundary → A6 grey-box execution → A7 review/verification → A8 save/machine-agent sync.
+- 구현 계획 뒤에 체크리스트처럼 붙이는 방식은 불완전하다. 아이디어/문제정의부터 구현·리뷰·검증·세이브·배포/릴리즈 관찰까지 관통해야 한다.
+- 작업별 skill stack은 작업 성격/위험도/난이도/중요도/운영 영향/available capability surface를 먼저 분류한 뒤 조합한다.
 
-## 검증
-- `session_search`로 gateway drain, Enterprise AI v4/model routing, OpenClaw/shared-state/Control Tower, Codex/Claude fallback 트랙 확인.
-- 기준선 문서 read-back 확인.
-- 기준선 문서 `wc -l -c` → 145 lines / 9175 bytes.
-- Hermes gateway 현재 상태: active/running, PID 275, start `2026-05-07 21:06:45 KST`.
+## Enterprise AI / Control Tower 연결
+- 최신 단일 기준: `hermes-2026-05-07-enterprise-ai-organization-master-plan-v4.md`.
+- v4 구현 전 gate: `difficulty_tier`, `model_tier`, `/do model_routing`, Claude/Codex alias 상태, fallback, cost_policy.
+- Capability status: `active / installed / cached / unused / needs-auth / blocked`; 파일 존재만으로 active 판정 금지.
 
 ## 다음 작업
-1. 사용자가 “이어가”라고 하면 먼저 기준선 문서를 읽고 해당 트랙을 선택한다.
-2. AlphaNexus/Enterprise AI 구현은 v4 + Light Spec v3 gate 확인 전 시작하지 않는다.
-3. Gateway live 반영은 별도 승인 후 Hermes gateway **서비스 재시작**으로 진행한다. 시스템 재부팅이 아니다.
+1. Enterprise AI/AlphaNexus/Control Tower 작업을 이어갈 때 v4 + 이 audit + 관련 raw source skill을 먼저 읽는다.
+2. 다음 구현 제안 전 routing packet에 선택한 skills/source files와 skip reason을 포함한다.
+3. 라이브 gateway fix 반영은 별도 승인 후 Hermes gateway **서비스 재시작**으로만 진행한다. 시스템 재부팅이 아니다.
 
 ## Cross-runtime / machine sync
-- 이 복구 기준선은 Telegram DM에서 시작되어 Obsidian raw/dev와 Hermes HANDOFF/WORKLOG에 기록된다.
-- Shared-state repo는 별도 commit으로 최신 기준선을 반영한다. 정확한 shared-state commit은 해당 repo `git log -1 --oneline` 기준으로 확인한다.
+- Telegram DM에서 시작된 복구를 Obsidian raw/dev, Hermes WORKLOG/HANDOFF, VibeCoding shared-state에 반영한다.
 - Desktop/G3는 pull-needed 상태로만 취급하며 배포/서비스 재시작은 하지 않았다.
 
 ## 안전 경계
 - Hermes gateway 서비스 재시작 없음.
-- 시스템 재부팅, G3/Desktop 배포, DB/secrets/auth/webhook 변경 없음.
+- 시스템 재부팅, G3/Desktop 배포, DB/secrets/auth/webhook/wiki apply 없음.

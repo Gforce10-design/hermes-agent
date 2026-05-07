@@ -1,5 +1,23 @@
 # hermes-agent WORKLOG
 
+## 2026-05-07 22:46 KST | Skill / workflow recovery audit
+
+### 작업 내용
+- 사용자가 지적한 누락축을 기준으로 세션 검색, v4 master plan, source skill injection plan, tri-tool-ddd-ai-workflow reference를 대조했다.
+- Obsidian raw/dev에 `hermes-2026-05-07-skill-workflow-recovery-audit.md`를 생성했다.
+- 복구 축: source skill injection, raw mirror/manifest, A0→A8 Alpha Workflow, 작업별 스킬 추천/조합, capability surface 상태 모델, Enterprise AI v4 model-routing gate 연결.
+
+### 검증
+- audit 문서 read-back 완료: 151 lines / 6175 bytes.
+- 확인 키워드: `source skill injection`, `1120`, `A0→A8`, `capability surface`, `difficulty_tier`.
+- raw mirror index 기준: mirrored 1120, skipped 0, missing_roots 0, redacted 55, mirrored_support 374.
+
+### 안전 경계
+- Hermes gateway 서비스 재시작, 시스템 재부팅, G3/Desktop 배포, DB/secrets/auth/webhook/wiki apply 없음.
+
+---
+
+
 ## 2026-05-07 22:14 KST | Memory boundary recovery baseline
 
 ### 작업 내용
