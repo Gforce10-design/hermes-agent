@@ -16,7 +16,7 @@
 - `python -m pytest tests/gateway/test_restart_drain.py tests/gateway/test_run_progress_topics.py -q` → 47 passed.
 - static secret/shell/eval/pickle scan → no hits.
 - 독립 xrev 최종 리뷰 → PASS.
-- Shared-state sync: `192492d docs: sync Hermes gateway restart recovery state` pushed to `origin/feature/shared-ai-state-20260506`.
+- Shared-state sync: shared-state repo `git log -1 --oneline` 기준 최신 sync commit pushed to `origin/feature/shared-ai-state-20260506`.
 
 ### 안전 경계
 - 이 구현/검증 중 Hermes gateway 서비스 재시작은 수행하지 않았다.

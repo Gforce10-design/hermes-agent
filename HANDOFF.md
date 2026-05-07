@@ -38,7 +38,7 @@
 
 ## Cross-runtime / machine sync
 - 이 작업은 Telegram DM에서 시작되어 A8 WSL repo에 구현되었다.
-- Shared-state sync: `/home/sudol/worktrees/vibecoding-shared-state-20260506` commit `192492d docs: sync Hermes gateway restart recovery state` pushed to `origin/feature/shared-ai-state-20260506`.
+- Shared-state sync: `/home/sudol/worktrees/vibecoding-shared-state-20260506` commit shared-state repo `git log -1 --oneline` 기준 최신 sync commit pushed to `origin/feature/shared-ai-state-20260506`.
 - Desktop/G3에는 배포하지 않았고, 필요 시 pull-needed 상태로 다룬다.
 
 ## 안전 경계
