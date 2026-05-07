@@ -15,6 +15,8 @@ import signal
 import subprocess
 import time
 from collections.abc import Sequence
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 TOOLSET = "openclaw"
@@ -42,6 +44,42 @@ APPROVAL_TOKEN_ENV = "OPENCLAW_WORKER_TRIGGER_APPROVAL_TOKEN"
 
 def _json(data: dict[str, Any]) -> str:
     return json.dumps(data, ensure_ascii=False)
+
+
+def _resolve_audit_path() -> Path:
+    override = os.environ.get("HERMES_OPENCLAW_AUDIT_PATH")
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".openclaw" / "audit" / "hermes-bridge.jsonl"
+
+
+def _append_audit_record(
+    tool: str, argv: tuple[str, ...], args: dict[str, Any] | None = None
+) -> str | None:
+    session_key = "unknown"
+    if isinstance(args, dict) and isinstance(args.get("sessionKey"), str) and args["sessionKey"].strip():
+        session_key = args["sessionKey"].strip()
+    record = {
+        "timestamp": datetime.now(UTC).isoformat(),
+        "caller": "hermes.openclaw_bridge",
+        "tool": tool,
+        "sessionKey": session_key,
+        "argv": list(argv),
+    }
+    try:
+        path = _resolve_audit_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+    except Exception as exc:
+        return f"audit append failed: {exc}"
+    return None
+
+
+def _merge_audit_error(result: dict[str, Any], audit_error: str | None) -> dict[str, Any]:
+    if audit_error:
+        return {**result, "audit_error": audit_error}
+    return result
 
 
 def _truncate(text: str | bytes | None, limit: int) -> tuple[str, bool]:
@@ -305,7 +343,10 @@ OPENCLAW_WORKER_TRIGGER_SCHEMA = {
 
 
 def handle_openclaw_status(args: dict[str, Any] | None = None, **_: Any) -> str:
-    return _json(_run_openclaw(("gateway", "status")))
+    argv = ("gateway", "status")
+    audit_error = _append_audit_record("openclaw_status", argv, args)
+    result = _run_openclaw(argv)
+    return _json(_merge_audit_error(result, audit_error))
 
 
 def handle_openclaw_cli(args: dict[str, Any] | None = None, **_: Any) -> str:
@@ -318,7 +359,9 @@ def handle_openclaw_cli(args: dict[str, Any] | None = None, **_: Any) -> str:
                 "error": "args must be a JSON array of non-empty strings, not a shell command string.",
             }
         )
-    return _json(_run_openclaw(argv))
+    audit_error = _append_audit_record("openclaw_cli", argv, args)
+    result = _run_openclaw(argv)
+    return _json(_merge_audit_error(result, audit_error))
 
 
 def handle_openclaw_worker_trigger(args: dict[str, Any] | None = None, **_: Any) -> str:
@@ -334,42 +377,53 @@ def handle_openclaw_worker_trigger(args: dict[str, Any] | None = None, **_: Any)
             }
         )
     if argv not in ALLOWED_WORKER_TRIGGER_ARGV:
+        audit_error = _append_audit_record("openclaw_worker_trigger", argv, payload)
         return _json(
-            {
-                "success": False,
-                "accepted": False,
-                "allowed": False,
-                "argv": list(argv),
-                "error": "OpenClaw worker trigger argv is not in the exact allowlist.",
-            }
+            _merge_audit_error(
+                {
+                    "success": False,
+                    "accepted": False,
+                    "allowed": False,
+                    "argv": list(argv),
+                    "error": "OpenClaw worker trigger argv is not in the exact allowlist.",
+                },
+                audit_error,
+            )
         )
 
+    audit_error = _append_audit_record("openclaw_worker_trigger", argv, payload)
     dry_run = payload.get("dry_run") is True
     execute = payload.get("execute") is True
     if dry_run:
         return _json(
-            {
-                "success": True,
-                "accepted": True,
-                "allowed": True,
-                "dry_run": True,
-                "execute": False,
-                "argv": list(argv),
-                "message": "OpenClaw worker trigger request validated; no subprocess executed.",
-            }
+            _merge_audit_error(
+                {
+                    "success": True,
+                    "accepted": True,
+                    "allowed": True,
+                    "dry_run": True,
+                    "execute": False,
+                    "argv": list(argv),
+                    "message": "OpenClaw worker trigger request validated; no subprocess executed.",
+                },
+                audit_error,
+            )
         )
 
     if not execute:
         return _json(
-            {
-                "success": False,
-                "accepted": False,
-                "allowed": True,
-                "dry_run": dry_run,
-                "execute": False,
-                "argv": list(argv),
-                "error": "Set dry_run=true for validate-only or execute=true with local approval to run.",
-            }
+            _merge_audit_error(
+                {
+                    "success": False,
+                    "accepted": False,
+                    "allowed": True,
+                    "dry_run": dry_run,
+                    "execute": False,
+                    "argv": list(argv),
+                    "error": "Set dry_run=true for validate-only or execute=true with local approval to run.",
+                },
+                audit_error,
+            )
         )
 
     approval_state = payload.get("approval_state")
@@ -378,39 +432,48 @@ def handle_openclaw_worker_trigger(args: dict[str, Any] | None = None, **_: Any)
     expected_token = os.environ.get(APPROVAL_TOKEN_ENV)
     if approval_state != APPROVED_LOCAL_CONTRACT:
         return _json(
-            {
-                "success": False,
-                "accepted": False,
-                "allowed": True,
-                "dry_run": dry_run,
-                "execute": True,
-                "argv": list(argv),
-                "error": "execute=true requires approval_state == approved_local_contract.",
-            }
+            _merge_audit_error(
+                {
+                    "success": False,
+                    "accepted": False,
+                    "allowed": True,
+                    "dry_run": dry_run,
+                    "execute": True,
+                    "argv": list(argv),
+                    "error": "execute=true requires approval_state == approved_local_contract.",
+                },
+                audit_error,
+            )
         )
     if not isinstance(trace_id, str) or not trace_id.strip():
         return _json(
-            {
-                "success": False,
-                "accepted": False,
-                "allowed": True,
-                "dry_run": dry_run,
-                "execute": True,
-                "argv": list(argv),
-                "error": "execute=true requires a non-empty trace_id.",
-            }
+            _merge_audit_error(
+                {
+                    "success": False,
+                    "accepted": False,
+                    "allowed": True,
+                    "dry_run": dry_run,
+                    "execute": True,
+                    "argv": list(argv),
+                    "error": "execute=true requires a non-empty trace_id.",
+                },
+                audit_error,
+            )
         )
     if not expected_token or approval_token != expected_token:
         return _json(
-            {
-                "success": False,
-                "accepted": False,
-                "allowed": True,
-                "dry_run": dry_run,
-                "execute": True,
-                "argv": list(argv),
-                "error": f"execute=true requires approval_token matching {APPROVAL_TOKEN_ENV}.",
-            }
+            _merge_audit_error(
+                {
+                    "success": False,
+                    "accepted": False,
+                    "allowed": True,
+                    "dry_run": dry_run,
+                    "execute": True,
+                    "argv": list(argv),
+                    "error": f"execute=true requires approval_token matching {APPROVAL_TOKEN_ENV}.",
+                },
+                audit_error,
+            )
         )
 
     result = _run_openclaw(argv, ALLOWED_WORKER_TRIGGER_ARGV)
@@ -422,4 +485,4 @@ def handle_openclaw_worker_trigger(args: dict[str, Any] | None = None, **_: Any)
             "trace_id": trace_id,
         }
     )
-    return _json(result)
+    return _json(_merge_audit_error(result, audit_error))

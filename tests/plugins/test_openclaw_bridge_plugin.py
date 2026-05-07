@@ -16,7 +16,8 @@ TOOL_NAMES = ("openclaw_status", "openclaw_cli", "openclaw_worker_trigger")
 
 
 @pytest.fixture(autouse=True)
-def _cleanup_registry():
+def _cleanup_registry(monkeypatch, tmp_path):
+    monkeypatch.setenv("HERMES_OPENCLAW_AUDIT_PATH", str(tmp_path / "hermes-bridge.jsonl"))
     for name in TOOL_NAMES:
         registry.deregister(name)
     yield
@@ -370,6 +371,56 @@ def test_openclaw_status_uses_fixed_gateway_status(monkeypatch, loaded_plugin):
 
     assert result == {"success": True, "argv": ["gateway", "status"]}
     assert seen == [("gateway", "status")]
+
+
+def test_openclaw_bridge_appends_minimal_audit_record(monkeypatch, tmp_path, loaded_plugin):
+    _loaded, tools_mod = loaded_plugin
+    audit_path = tmp_path / "hermes-bridge.jsonl"
+
+    monkeypatch.setenv("HERMES_OPENCLAW_AUDIT_PATH", str(audit_path))
+    monkeypatch.setattr(tools_mod, "_run_openclaw", lambda argv: {"success": True, "argv": list(argv)})
+
+    result = _decode(tools_mod.handle_openclaw_cli({"args": ["gateway", "status"]}))
+
+    assert result["success"] is True
+    records = [json.loads(line) for line in audit_path.read_text(encoding="utf-8").splitlines()]
+    assert len(records) == 1
+    assert records[0]["caller"] == "hermes.openclaw_bridge"
+    assert records[0]["tool"] == "openclaw_cli"
+    assert records[0]["sessionKey"] == "unknown"
+    assert records[0]["argv"] == ["gateway", "status"]
+    assert isinstance(records[0]["timestamp"], str)
+
+
+def test_openclaw_bridge_reports_audit_append_failure(monkeypatch, tmp_path, loaded_plugin):
+    _loaded, tools_mod = loaded_plugin
+    audit_parent = tmp_path / "not-a-dir"
+    audit_parent.write_text("occupied", encoding="utf-8")
+    monkeypatch.setenv("HERMES_OPENCLAW_AUDIT_PATH", str(audit_parent / "hermes-bridge.jsonl"))
+    monkeypatch.setattr(tools_mod, "_run_openclaw", lambda argv: {"success": True, "argv": list(argv)})
+
+    result = _decode(tools_mod.handle_openclaw_cli({"args": ["gateway", "status"]}))
+
+    assert result["success"] is True
+    assert "audit append failed" in result["audit_error"]
+
+
+def test_openclaw_worker_trigger_appends_audit_record(monkeypatch, tmp_path, loaded_plugin):
+    _loaded, tools_mod = loaded_plugin
+    audit_path = tmp_path / "worker-audit.jsonl"
+    monkeypatch.setenv("HERMES_OPENCLAW_AUDIT_PATH", str(audit_path))
+
+    result = _decode(
+        tools_mod.handle_openclaw_worker_trigger(
+            {"argv": ["worker", "trigger", "loop"], "dry_run": True, "sessionKey": "agent:main:main"}
+        )
+    )
+
+    assert result["success"] is True
+    records = [json.loads(line) for line in audit_path.read_text(encoding="utf-8").splitlines()]
+    assert records[0]["tool"] == "openclaw_worker_trigger"
+    assert records[0]["sessionKey"] == "agent:main:main"
+    assert records[0]["argv"] == ["worker", "trigger", "loop"]
 
 
 def test_toolset_visibility_respects_enabled_toolsets(monkeypatch, loaded_plugin):

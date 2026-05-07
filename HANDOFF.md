@@ -2,45 +2,36 @@
 
 ## 현재 상태
 - 머신/인터페이스: A8Max WSL, CLI Hermes.
-- 브랜치: `main` tracking `fork/main`.
-- 최신 repo commit: 이 HANDOFF 포함 세이브 커밋은 `git log -1 --oneline` 기준으로 확인한다.
-- 현재 작업: OpenClaw + Hermes 정상 협업 재설계로 넘어가기 전 세션 종료 세이브.
-
-## 다음 세션 진입점
-- 사용자 결정: 옵션 A 정상화 재설계 풀 진행, 새벽 6시 마감 목표.
-- 다음 세션은 `A 단계 옵션 A 정상화 재설계 A0`부터 시작한다.
-- 먼저 `hermes-operating-constitution` skill을 로드하고, 이 HANDOFF와 `~/.hermes/sessions/handoff/2026-05-08-A-pending.md`를 읽는다.
+- Hermes repo branch: `main` at pre-save `1065ad5d6` plus current save edits.
+- OpenClaw repo branch: `main` at pre-save `97b07eaeaf` plus current A6 edits.
+- 작업: OpenClaw/Hermes 정상화 A6 구현 완료, A7/A8 저장 진행 중.
 
 ## 저장된 기준
-- 세션 handoff: `/home/sudol/.hermes/sessions/handoff/2026-05-08-A-pending.md`
-- Obsidian save note: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-08-openclaw-hermes-normalization-diagnosis-save.md`
-- 헌법 skill: `/home/sudol/.hermes/skills/hermes-operating-constitution/SKILL.md`
-- USER.md: `/home/sudol/.hermes/memories/USER.md`
+- A6 result: `/home/sudol/.hermes/sessions/handoff/2026-05-08-A6-result.md`
+- Obsidian save note: `/mnt/c/Users/sudol/Documents/Syncthings/옵시디언/나의 제2의 뇌/00. 지식 위키/raw/dev/hermes-2026-05-08-openclaw-normalization-a6-save.md`
+- OpenClaw runtime: `openclaw-gateway.service`, PID 26793 after restart, `127.0.0.1:18789`, probe ok.
 
-## B 진단 핵심 수치
-- OpenClaw gateway: running, PID 276, loopback `127.0.0.1:18789`, admin-capable.
-- Hermes bridge: `openclaw-bridge` enabled `0.4.0`.
-- 최근 24h Hermes→OpenClaw call: `openclaw_status` 25회, `openclaw_cli` 29회.
-- 최근 30d actual-ish sessions: 71개. `openclaw_status` 92, `openclaw_cli` 41, `openclaw_worker_trigger` 17, `openclaw_exec` 18.
-- OpenClaw main agent auth profiles: 0개.
-- Codex auth: 존재.
-- ClawHub: enabled=False, 실사용 증거 미확인.
-- OpenClaw auth failure: 00:28/00:58/01:28/01:58/02:28 주기, lane error 10건 + fallback warn 5건.
+## 구현 결과
+- 후보 1 auth 차단/격리: OpenClaw autonomous cron agent가 빈 `auth-profiles.json` profiles {} 상태에서 `disabled due to missing auth`로 skip.
+- 후보 2 bridge audit: Hermes `openclaw_status`, `openclaw_cli`, `openclaw_worker_trigger` plugin handlers가 최소 audit jsonl 기록. append 실패 시 `audit_error` 반환.
 
-## 미완
-- 운영 런타임 강제 적용 검증 미완.
-- Claude Code 주입 미진행.
-- Codex CLI 주입 미진행.
-- v2 audit pending: OpenClaw 호출 메커니즘, 멀티 세션 일관성, shared-state matrix 복구, 주간 audit 시간대.
-- 옵션 A 정상화 재설계 미진행. 다음 세션 A0 시작.
+## 검증
+- OpenClaw targeted tests 11 passed.
+- Hermes plugin tests 17 passed.
+- OpenClaw build exit 0.
+- Gateway status: running/probe ok/admin-capable.
+- 03:28 자연 검증: 기존 30분 auth failure 로그 재발 없음.
+- 최종 independent review: passed, no blocking issues.
 
-## Cross-runtime / machine sync
-- A8가 현재 source machine이다.
-- CLI 작업 내용을 Hermes WORKLOG/HANDOFF, sessions handoff, Obsidian raw/dev, shared-state에 반영한다.
-- Desktop/G3는 pull-needed/미반영 상태로만 취급한다. G3/D: 접근은 하지 않았다.
+## 미완 / 다음 작업
+- 03:58/04:28 tick 추가 관찰 결과를 후속 반영.
+- 현재 대화 내장 OpenClaw developer tool은 수정한 Hermes plugin과 별도 런타임으로 보여 현재 세션 실시간 audit은 부분 검증.
+- 다음 Hermes plugin reload/세션에서 `~/.openclaw/audit/hermes-bridge.jsonl` 실제 호출 기록 확인.
+- OpenClaw 직접 실행 경로 헌법 사각지대, 9필드 풀 수집, shared-state matrix 복구는 v2 audit/후속 작업.
 
 ## 안전 경계
-- OpenClaw 제거/차단/비활성화 없음.
-- 새 코드 작성 없음.
-- Hermes/OpenClaw 서비스 재시작 없음.
-- 시스템 재부팅, G3/D: 접근, 배포, DB/secrets/auth/webhook/wiki apply 없음.
+- 시스템 재부팅 없음.
+- G3/D: 접근 없음.
+- DB/secrets/auth 파일 직접 수정 없음.
+- webhook/wiki apply 없음.
+- OpenClaw gateway 서비스 재시작 1회만 수행; Hermes gateway/console 재시작 없음.

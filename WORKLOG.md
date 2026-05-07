@@ -1,5 +1,31 @@
 # hermes-agent WORKLOG
 
+## 2026-05-08 03:59 KST | OpenClaw/Hermes normalization A6 implementation
+
+### 작업 내용
+- 옵션 A 정상화 재설계 A6를 사용자 승인(1번: 두 후보 모두 구현) 후 진행했다.
+- OpenClaw autonomous cron agent의 빈 auth store 반복 실패를 차단/격리했다.
+- Hermes OpenClaw bridge plugin에 최소 audit jsonl 기록을 추가했다.
+- 결과 handoff와 Obsidian raw/dev save note를 작성했다.
+
+### 핵심 결정
+- auth/secret 파일 직접 수정은 하지 않았다.
+- 빈 `auth-profiles.json` + `profiles: {}`는 autonomous cron에서 explicit missing-auth 상태로 취급한다.
+- OpenClaw 직접 실행 경로 전체 통제와 9필드 풀 audit은 v2 audit/후속 작업으로 미뤘다.
+
+### 검증
+- OpenClaw targeted tests 11 passed.
+- Hermes plugin tests 17 passed.
+- OpenClaw dist build exit 0, gateway service restarted once and PID 26793/probe ok 확인.
+- 03:28 자연 검증: auth 실패/lane error 재발 없음.
+- 최종 독립 리뷰 passed.
+
+### 안전 경계
+- 시스템 재부팅, G3/D: 접근, DB/secrets/auth 파일 수정, webhook/wiki apply 없음.
+- OpenClaw gateway 서비스 재시작 1회는 A6 구현 반영/검증 범위에서 수행했다.
+
+---
+
 ## 2026-05-08 02:55:01 KST | OpenClaw/Hermes constitution save and diagnosis handoff
 
 ### 작업 내용
