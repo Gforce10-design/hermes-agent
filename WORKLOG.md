@@ -1,5 +1,25 @@
 # hermes-agent WORKLOG
 
+## 2026-05-07 20:51 KST | A8 reboot-prep handoff correction save
+
+### 작업 내용
+- Telegram 대화 기준 실제 완료 작업이 `AlphaMate Doctor`가 아니라 Hermes `capability_route` 구현/검증/저장임을 확인하고 보고 오류를 정정했다.
+- `HANDOFF.md`의 stale 브랜치명과 "재기반화 중" 문구를 현재 `main` / `fork/main` 상태로 정정했다.
+- A8 재부팅 전 복구용 상태와 다음 확인 절차를 HANDOFF에 남겼다.
+- 누락된 cross-runtime shared-state save surface를 추가로 보완하고 VibeCoding shared-state commit `45f2364`로 push했다.
+
+### 검증
+- `git status -sb` → `main...fork/main`.
+- `git log -1 --oneline --decorate` → `8df572640 (HEAD -> main, fork/main) feat: add read-only capability router tool`.
+- `python -m pytest tests/tools/test_capability_router_tool.py -q` → 13 passed.
+- Shared-state JSON/JSONL parse 및 push 확인: `45f2364` on `origin/feature/shared-ai-state-20260506`.
+
+### 안전 경계
+- A8 시스템 재부팅은 사용자가 직접 수행 예정이며, Hermes는 재부팅 명령을 실행하지 않았다.
+- Hermes gateway/service 재시작, G3/Desktop 배포, DB/secrets/auth/webhook 변경 없음.
+
+---
+
 ## 2026-05-07 | Capability Router v1 read-only tool
 
 ### 작업 내용
