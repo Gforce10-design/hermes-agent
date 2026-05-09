@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -16,7 +17,16 @@ TOOL_NAMES = ("openclaw_status", "openclaw_cli", "openclaw_worker_trigger")
 
 
 @pytest.fixture(autouse=True)
-def _cleanup_registry():
+def _cleanup_registry(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPENCLAW_INVOCATION_LEDGER_DIR", str(tmp_path / "openclaw-ledger"))
+    monkeypatch.delenv("OPENCLAW_AUTH_STATUS", raising=False)
+    monkeypatch.delenv("OPENCLAW_AUTH_PROFILE", raising=False)
+    monkeypatch.delenv("OPENCLAW_AUTH_PROFILE_PATH", raising=False)
+    monkeypatch.delenv("OPENCLAW_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("HERMES_SOURCE_CHANNEL", raising=False)
+    monkeypatch.delenv("HERMES_SESSION_ID", raising=False)
     for name in TOOL_NAMES:
         registry.deregister(name)
     yield
@@ -49,6 +59,16 @@ def loaded_plugin():
 
 def _decode(result: str) -> dict:
     return json.loads(result)
+
+
+def _ledger_events() -> list[dict]:
+    ledger_dir = Path(os.environ["OPENCLAW_INVOCATION_LEDGER_DIR"])
+    files = sorted(ledger_dir.glob("*.jsonl"))
+    assert files
+    events = []
+    for file in files:
+        events.extend(json.loads(line) for line in file.read_text(encoding="utf-8").splitlines())
+    return events
 
 
 def test_registers_openclaw_tools_in_openclaw_toolset(loaded_plugin):
@@ -98,6 +118,7 @@ def test_openclaw_worker_trigger_dry_run_validates_without_executing(monkeypatch
 def test_openclaw_worker_trigger_execute_requires_local_contract_and_trace(monkeypatch, loaded_plugin):
     _loaded, tools_mod = loaded_plugin
     calls = []
+    monkeypatch.setenv("OPENCLAW_AUTH_STATUS", "usable")
 
     def fake_run(argv, allowed_argv=None):
         calls.append(argv)
@@ -171,7 +192,40 @@ def test_openclaw_worker_trigger_execute_requires_local_contract_and_trace(monke
     assert executed["success"] is True
     assert executed["accepted"] is True
     assert executed["trace_id"] == "trace-2"
+    assert executed["auth"]["auth_status"] == "usable"
     assert calls == [("worker", "trigger", "loop")]
+
+
+def test_openclaw_worker_trigger_blocks_missing_auth_before_subprocess(monkeypatch, loaded_plugin):
+    _loaded, tools_mod = loaded_plugin
+    calls = []
+
+    def fake_run(argv, allowed_argv=None):
+        calls.append(argv)
+        return {"success": True, "argv": list(argv), "returncode": 0}
+
+    monkeypatch.setenv("OPENCLAW_WORKER_TRIGGER_APPROVAL_TOKEN", "trusted-token")
+    monkeypatch.setattr(tools_mod, "_run_openclaw", fake_run)
+
+    result = _decode(
+        tools_mod.handle_openclaw_worker_trigger(
+            {
+                "argv": ["worker", "trigger", "loop"],
+                "execute": True,
+                "approval_state": "approved_local_contract",
+                "approval_token": "trusted-token",
+                "trace_id": "trace-auth-missing",
+            }
+        )
+    )
+
+    assert result["success"] is False
+    assert result["accepted"] is False
+    assert result["status"] == "blocked_auth_missing"
+    assert result["blocked_reason"] == "openclaw_auth_profile_missing"
+    assert result["auth"]["auth_status"] == "missing"
+    assert calls == []
+    assert _ledger_events()[-1]["result"] == "blocked"
 
 
 def test_openclaw_worker_trigger_rejects_shell_strings_and_arbitrary_argv(monkeypatch, loaded_plugin):
@@ -299,6 +353,45 @@ def test_openclaw_cli_bounds_stdout_and_stderr(monkeypatch, loaded_plugin):
     assert len(result["stderr"]) > tools_mod.MAX_STDERR_CHARS
 
 
+def test_openclaw_cli_redacts_output_and_writes_sanitized_ledger(monkeypatch, loaded_plugin):
+    _loaded, tools_mod = loaded_plugin
+    from agent import redact
+
+    secret = "sk-proj-abc123def456ghi789jkl012mno345"
+
+    def fake_run(command):
+        return {
+            "returncode": 0,
+            "timed_out": False,
+            "stdout": f"OPENAI_API_KEY={secret}",
+            "stderr": f"token={secret}",
+            "stdout_truncated": False,
+            "stderr_truncated": False,
+        }
+
+    monkeypatch.setattr(redact, "_REDACT_ENABLED", True)
+    monkeypatch.setenv("HERMES_SOURCE_CHANNEL", "cron")
+    monkeypatch.setenv("HERMES_SESSION_ID", "session-raw-value")
+    monkeypatch.setattr(tools_mod, "_resolve_openclaw_bin", lambda: "/bin/openclaw")
+    monkeypatch.setattr(tools_mod, "_run_bounded_subprocess", fake_run)
+
+    result = _decode(tools_mod.handle_openclaw_cli({"args": ["gateway", "health"]}))
+    events = _ledger_events()
+    event = events[-1]
+
+    assert result["success"] is True
+    assert secret not in result["stdout"]
+    assert secret not in result["stderr"]
+    assert result["audit_logged"] is True
+    assert event["tool_name"] == "openclaw_cli"
+    assert event["source_channel"] == "cron"
+    assert event["hermes_session_id"].startswith("sha256:")
+    assert event["argv_hash"].startswith("sha256:")
+    assert event["argv_label"] == "gateway health"
+    assert event["result"] == "success"
+    assert secret not in json.dumps(event)
+
+
 def test_bounded_subprocess_times_out_when_descendant_holds_pipe(tmp_path, loaded_plugin):
     _loaded, tools_mod = loaded_plugin
     survivor_marker = tmp_path / "survived.txt"
@@ -368,7 +461,10 @@ def test_openclaw_status_uses_fixed_gateway_status(monkeypatch, loaded_plugin):
 
     result = _decode(tools_mod.handle_openclaw_status({}))
 
-    assert result == {"success": True, "argv": ["gateway", "status"]}
+    assert result["success"] is True
+    assert result["argv"] == ["gateway", "status"]
+    assert result["auth"]["auth_status"] == "missing"
+    assert result["audit_logged"] is True
     assert seen == [("gateway", "status")]
 
 

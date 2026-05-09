@@ -283,3 +283,34 @@
 - OpenClaw gateway runtime은 시작하지 않았다. `openclaw gateway status` 기준 stopped 상태다.
 - Hermes Gateway/Console 재시작은 하지 않았다.
 - 기존 unrelated 변경 `ui-tui/package-lock.json`, `mobile/`은 건드리지 않는다.
+
+## [2026-05-10 01:40 KST] implement | OpenClaw auth preflight + redacted invocation ledger
+
+### 작업 내용
+- AlphaMate `HANDOFF.md`의 OpenClaw Option A 다음 slice를 이어서, Desktop Hermes repo의 `plugins/openclaw-bridge/tools.py`를 수정했다.
+- `openclaw_status`, `openclaw_cli`, `openclaw_worker_trigger` 결과에 redacted auth metadata, `audit_logged`, `evidence_ref`를 추가했다.
+- `openclaw_worker_trigger execute=true`는 기존 `approved_local_contract`/`trace_id`/local approval token gate 통과 후에도 auth preflight가 `usable`이 아니면 `blocked_auth_missing`으로 막고 subprocess/model invocation을 시작하지 않게 했다.
+- `~/.hermes/audit/openclaw-invocations/YYYY-MM-DD.jsonl` append-only ledger를 추가했다. Ledger에는 raw stdout/stderr/prompt/env/token을 저장하지 않고 `argv_hash`, allowlisted `argv_label`, source channel, hashed session id, auth status, result label만 저장한다.
+- stdout/stderr/error 등 tool result 문자열은 반환 전에 Hermes `agent.redact.redact_sensitive_text`를 적용한다.
+- Windows에서 기존 `selectors` 기반 pipe read가 실패하던 bounded subprocess를 thread reader + process-tree timeout kill 방식으로 보정했다.
+- Desktop read-only 확인 결과, `C:\Users\sudol\.hermes\cron\jobs.json`은 없고 Hermes/OpenClaw/AlphaMate 관련 Windows Scheduled Task도 발견되지 않았다.
+
+### 왜 그렇게 바꿨는지
+- 반복 auth failure가 실제 model invocation까지 진행되지 않도록, worker trigger 직전에 명시적인 fail-closed preflight를 두기 위해서다.
+- unauthorized-save 류 사고를 추적할 수 있게 raw data 없는 append-only evidence stream이 필요했다.
+- Control Tower projection에 넘길 수 있는 `installed/gateway/auth/execution_allowed` 계열 read-only evidence를 만들기 위한 기반이다.
+
+### 검증/테스트 결과
+- `python -m pytest -o addopts= tests/plugins/test_openclaw_bridge_plugin.py` → 16 passed, 1 existing deprecation warning.
+- `python -m compileall plugins/openclaw-bridge/tools.py` 통과.
+- `git diff --check` 통과, CRLF warning only.
+
+### 리뷰 이력 또는 리스크
+- 기존 allowlist, dry-run, approval token, `trace_id`, timeout 경계는 유지했다.
+- `OPENCLAW_AUTH_STATUS=usable` 또는 명시적 private profile/API key presence가 없으면 worker trigger execute는 `blocked_auth_missing`으로 막힌다.
+- Desktop에는 실제 Hermes runtime cron/systemd/OpenClaw scheduler evidence가 없어서 30분 반복 실패 source는 A8/G3에서 재확인해야 한다.
+
+### 다음 작업
+- A8/G3의 Hermes cron, systemd user timer/service, OpenClaw worker scheduler를 read-only로 확인해 30분 반복 source를 특정한다.
+- Control Tower read-only projection에 OpenClaw `installed/gateway/auth/execution_allowed` lane을 추가한다.
+- quarantine/disable이 필요하면 사용자 승인 후 정확한 job만 대상으로 적용한다.
