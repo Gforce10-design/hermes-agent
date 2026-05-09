@@ -61,6 +61,7 @@ def make_restart_runner(
     runner._restart_task_started = False
     runner._restart_detached = False
     runner._restart_via_service = False
+    runner._restart_deferred_until_idle = False
     runner._restart_drain_timeout = DEFAULT_GATEWAY_RESTART_DRAIN_TIMEOUT
     runner._stop_task = None
     runner._busy_input_mode = "interrupt"
@@ -100,6 +101,12 @@ def make_restart_runner(
         GatewayRunner._notify_active_sessions_of_shutdown.__get__(runner, GatewayRunner)
     )
     runner._launch_detached_restart_command = GatewayRunner._launch_detached_restart_command.__get__(
+        runner, GatewayRunner
+    )
+    runner._refresh_restart_dedup_marker = GatewayRunner._refresh_restart_dedup_marker.__get__(
+        runner, GatewayRunner
+    )
+    runner._release_running_agent_state = GatewayRunner._release_running_agent_state.__get__(
         runner, GatewayRunner
     )
     runner.request_restart = GatewayRunner.request_restart.__get__(runner, GatewayRunner)

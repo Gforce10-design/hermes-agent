@@ -637,6 +637,7 @@ class GatewayRunner:
     _restart_task_started: bool = False
     _restart_detached: bool = False
     _restart_via_service: bool = False
+    _restart_deferred_until_idle: bool = False
     _stop_task: Optional[asyncio.Task] = None
     _session_model_overrides: Dict[str, Dict[str, str]] = {}
     
@@ -675,8 +676,9 @@ class GatewayRunner:
         self._restart_task_started = False
         self._restart_detached = False
         self._restart_via_service = False
+        self._restart_deferred_until_idle = False
         self._stop_task: Optional[asyncio.Task] = None
-        
+
         # Track running agents per session for interrupt support
         # Key: session_key, Value: AIAgent instance
         self._running_agents: Dict[str, Any] = {}
@@ -1262,7 +1264,7 @@ class GatewayRunner:
         self._shutdown_event.set()
 
     def _running_agent_count(self) -> int:
-        return len(self._running_agents)
+        return len(self._snapshot_running_agents())
 
     def _status_action_label(self) -> str:
         return "restart" if self._restart_requested else "shutdown"
@@ -1666,7 +1668,7 @@ class GatewayRunner:
                 last_active_count = active_count
                 last_status_at = now
 
-        if not self._running_agents:
+        if self._running_agent_count() == 0:
             _maybe_update_status(force=True)
             return snapshot, False
 
@@ -1675,10 +1677,10 @@ class GatewayRunner:
             return snapshot, True
 
         deadline = asyncio.get_running_loop().time() + timeout
-        while self._running_agents and asyncio.get_running_loop().time() < deadline:
+        while self._running_agent_count() > 0 and asyncio.get_running_loop().time() < deadline:
             _maybe_update_status()
             await asyncio.sleep(0.1)
-        timed_out = bool(self._running_agents)
+        timed_out = self._running_agent_count() > 0
         _maybe_update_status(force=True)
         return snapshot, timed_out
 
@@ -1931,12 +1933,43 @@ class GatewayRunner:
                 start_new_session=True,
             )
 
-    def request_restart(self, *, detached: bool = False, via_service: bool = False) -> bool:
+    def _refresh_restart_dedup_marker(self) -> None:
+        """Refresh processed-/restart marker so long deferred restarts still dedup redelivery."""
+        marker_path = _hermes_home / ".restart_last_processed.json"
+        try:
+            if not marker_path.exists():
+                return
+            data = json.loads(marker_path.read_text())
+            if not isinstance(data, dict):
+                return
+            data["requested_at"] = time.time()
+            marker_path.write_text(json.dumps(data))
+        except Exception as e:
+            logger.debug("Failed to refresh restart dedup marker: %s", e)
+
+    def request_restart(
+        self,
+        *,
+        detached: bool = False,
+        via_service: bool = False,
+        defer_when_busy: bool = True,
+    ) -> bool:
         if self._restart_task_started:
             return False
         self._restart_requested = True
         self._restart_detached = detached
         self._restart_via_service = via_service
+        active_count = self._running_agent_count()
+        if defer_when_busy and active_count > 0:
+            self._restart_deferred_until_idle = True
+            logger.info(
+                "Gateway restart deferred until %d active agent(s) finish",
+                active_count,
+            )
+            self._update_runtime_status("running")
+            return True
+        self._restart_deferred_until_idle = False
+        self._refresh_restart_dedup_marker()
         self._restart_task_started = True
 
         async def _run_restart() -> None:
@@ -2688,7 +2721,7 @@ class GatewayRunner:
                     _INTERRUPT_REASON_GATEWAY_RESTART if self._restart_requested else _INTERRUPT_REASON_GATEWAY_SHUTDOWN
                 )
                 interrupt_deadline = asyncio.get_running_loop().time() + 5.0
-                while self._running_agents and asyncio.get_running_loop().time() < interrupt_deadline:
+                while self._running_agent_count() > 0 and asyncio.get_running_loop().time() < interrupt_deadline:
                     self._update_runtime_status("draining")
                     await asyncio.sleep(0.1)
 
@@ -8859,6 +8892,17 @@ class GatewayRunner:
         self._running_agents_ts.pop(session_key, None)
         if hasattr(self, "_busy_ack_ts"):
             self._busy_ack_ts.pop(session_key, None)
+        if (
+            getattr(self, "_restart_deferred_until_idle", False)
+            and self._restart_requested
+            and not self._restart_task_started
+            and self._running_agent_count() == 0
+        ):
+            self.request_restart(
+                detached=getattr(self, "_restart_detached", False),
+                via_service=getattr(self, "_restart_via_service", False),
+                defer_when_busy=False,
+            )
         return True
 
     def _clear_session_boundary_security_state(self, session_key: str) -> None:

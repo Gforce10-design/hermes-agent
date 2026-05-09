@@ -1,6 +1,8 @@
 import asyncio
+import json
 import shutil
 import subprocess
+import time
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
@@ -135,6 +137,102 @@ async def test_request_restart_is_idempotent():
     runner.stop.assert_awaited_once_with(
         restart=True, detached_restart=True, service_restart=False
     )
+
+
+@pytest.mark.asyncio
+async def test_request_restart_defers_until_active_agents_finish():
+    runner, _adapter = make_restart_runner()
+    runner.stop = AsyncMock()
+    runner._running_agents["agent:main:telegram:dm:999"] = MagicMock()
+
+    assert runner.request_restart(detached=True, via_service=False) is True
+
+    await asyncio.sleep(0.1)
+
+    runner.stop.assert_not_awaited()
+    assert runner._restart_requested is True
+    assert runner._restart_deferred_until_idle is True
+    assert runner._restart_task_started is False
+
+    runner._release_running_agent_state("agent:main:telegram:dm:999")
+    await asyncio.sleep(0.1)
+
+    runner.stop.assert_awaited_once_with(
+        restart=True, detached_restart=True, service_restart=False
+    )
+
+
+@pytest.mark.asyncio
+async def test_restart_command_ignores_pending_sentinel_when_counting_active_agents(monkeypatch):
+    from gateway.run import _AGENT_PENDING_SENTINEL
+
+    monkeypatch.delenv("INVOCATION_ID", raising=False)
+    runner, _adapter = make_restart_runner()
+    runner.request_restart = MagicMock(return_value=True)
+    event = MessageEvent(
+        text="/restart",
+        message_type=MessageType.TEXT,
+        source=make_restart_source(),
+        message_id="m4",
+    )
+    session_key = build_session_key(event.source)
+    runner._running_agents[session_key] = _AGENT_PENDING_SENTINEL
+
+    result = await runner._handle_restart_command(event)
+
+    assert result.startswith("♻ Restarting gateway")
+    runner.request_restart.assert_called_once_with(detached=True, via_service=False)
+
+
+@pytest.mark.asyncio
+async def test_drain_active_agents_ignores_pending_sentinels():
+    from gateway.run import _AGENT_PENDING_SENTINEL
+
+    runner, _adapter = make_restart_runner()
+    runner._running_agents["agent:main:telegram:dm:999"] = _AGENT_PENDING_SENTINEL
+    start = time.monotonic()
+
+    snapshot, timed_out = await runner._drain_active_agents(0.5)
+
+    assert snapshot == {}
+    assert timed_out is False
+    assert time.monotonic() - start < 0.2
+
+
+@pytest.mark.asyncio
+async def test_stop_drain_ignores_pending_sentinels(monkeypatch):
+    from gateway.run import _AGENT_PENDING_SENTINEL
+
+    runner, adapter = make_restart_runner()
+    adapter.cancel_background_tasks = AsyncMock()
+    adapter.disconnect = AsyncMock()
+    runner._finalize_shutdown_agents = MagicMock()
+    runner._shutdown_all_gateway_honcho = MagicMock()
+    runner._running_agents["agent:main:telegram:dm:999"] = _AGENT_PENDING_SENTINEL
+    runner._restart_drain_timeout = 0.01
+
+    await runner.stop(restart=True, detached_restart=False, service_restart=False)
+
+    runner._finalize_shutdown_agents.assert_called_once_with({})
+    adapter.disconnect.assert_awaited_once()
+
+
+def test_refresh_restart_dedup_marker_extends_old_marker(tmp_path, monkeypatch):
+    monkeypatch.setattr(gateway_run, "_hermes_home", tmp_path)
+    marker = tmp_path / ".restart_last_processed.json"
+    old_ts = time.time() - 600
+    marker.write_text(
+        json.dumps({"platform": "telegram", "update_id": 123, "requested_at": old_ts}),
+        encoding="utf-8",
+    )
+    runner, _adapter = make_restart_runner()
+
+    runner._refresh_restart_dedup_marker()
+
+    data = json.loads(marker.read_text(encoding="utf-8"))
+    assert data["platform"] == "telegram"
+    assert data["update_id"] == 123
+    assert data["requested_at"] > old_ts
 
 
 @pytest.mark.asyncio

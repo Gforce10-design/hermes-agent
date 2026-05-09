@@ -468,6 +468,58 @@ def test_openclaw_status_uses_fixed_gateway_status(monkeypatch, loaded_plugin):
     assert seen == [("gateway", "status")]
 
 
+def test_openclaw_bridge_appends_sanitized_invocation_ledger(monkeypatch, loaded_plugin):
+    _loaded, tools_mod = loaded_plugin
+
+    monkeypatch.setattr(tools_mod, "_run_openclaw", lambda argv: {"success": True, "argv": list(argv)})
+
+    result = _decode(tools_mod.handle_openclaw_cli({"args": ["gateway", "status"]}))
+
+    assert result["success"] is True
+    records = _ledger_events()
+    assert len(records) == 1
+    assert records[0]["source_runtime"] == "hermes"
+    assert records[0]["tool_name"] == "openclaw_cli"
+    assert records[0]["argv_label"] == "gateway status"
+    assert records[0]["argv_hash"].startswith("sha256:")
+    assert "argv" not in records[0]
+    assert isinstance(records[0]["ts"], str)
+
+
+def test_openclaw_bridge_reports_audit_append_failure(monkeypatch, tmp_path, loaded_plugin):
+    _loaded, tools_mod = loaded_plugin
+    ledger_dir = tmp_path / "not-a-dir"
+    ledger_dir.write_text("occupied", encoding="utf-8")
+    monkeypatch.setenv("OPENCLAW_INVOCATION_LEDGER_DIR", str(ledger_dir))
+    monkeypatch.setattr(tools_mod, "_run_openclaw", lambda argv: {"success": True, "argv": list(argv)})
+
+    result = _decode(tools_mod.handle_openclaw_cli({"args": ["gateway", "status"]}))
+
+    assert result["success"] is True
+    assert result["audit_logged"] is False
+    assert result["evidence_ref"].startswith("audit:openclaw-invocations/")
+
+
+def test_openclaw_worker_trigger_appends_audit_record(monkeypatch, tmp_path, loaded_plugin):
+    _loaded, tools_mod = loaded_plugin
+    monkeypatch.setenv("HERMES_SOURCE_CHANNEL", "gateway")
+    monkeypatch.setenv("HERMES_SESSION_ID", "agent:main:main")
+
+    result = _decode(
+        tools_mod.handle_openclaw_worker_trigger(
+            {"argv": ["worker", "trigger", "loop"], "dry_run": True}
+        )
+    )
+
+    assert result["success"] is True
+    records = _ledger_events()
+    assert records[0]["tool_name"] == "openclaw_worker_trigger"
+    assert records[0]["source_channel"] == "gateway"
+    assert records[0]["hermes_session_id"].startswith("sha256:")
+    assert records[0]["argv_label"] == "worker trigger loop"
+    assert "agent:main:main" not in json.dumps(records[0])
+
+
 def test_toolset_visibility_respects_enabled_toolsets(monkeypatch, loaded_plugin):
     _loaded, tools_mod = loaded_plugin
     from model_tools import get_tool_definitions

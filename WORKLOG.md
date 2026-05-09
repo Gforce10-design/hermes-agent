@@ -1,5 +1,239 @@
 # hermes-agent WORKLOG
 
+## 2026-05-08 06:33:13 KST | 우선순위 3-2 진단 및 deferred findings save
+
+### 작업 내용
+- OpenClaw `agent:main:main` embedded lane 진입 경로 추적 결과를 영구 저장했다.
+- A6 guard가 cron isolated 경로에만 적용되고 heartbeat embedded 경로는 통과하지 않는 분기점을 확인했다.
+- 옵션 B 후속 자연 검증 중 새 HTTP 400 모델 불일치 발견(`gpt-5.2-codex`)을 deferred findings로 별도 저장했다.
+- Claude에게 넘길 현재 상황 요약문을 작성했다.
+
+### 핵심 결정
+- 3-3/3-4 구현은 사용자 승인 전 자율 진행하지 않는다.
+- 옵션 B의 temperature 거부 차단은 성공으로 보되, auxiliary 모델 불일치 문제는 별도 진단 대상으로 분리한다.
+- OpenClaw 차단 방향 권장은 기존 A6 helper 재사용 + heartbeat embedded enqueue 직전 차단 후보다.
+
+### 검증
+- 진단 파일 read-back: `/home/sudol/.hermes/sessions/handoff/2026-05-08-priority3-step2-diagnosis.md`.
+- deferred findings read-back: `/home/sudol/.hermes/sessions/handoff/2026-05-08-priority3-step2-deferred-findings.md`.
+- OpenClaw repo는 진단 중 코드 수정 없음으로 확인.
+
+### 안전 경계
+- 코드 구현, 서비스 재시작, 시스템 재부팅, G3/Desktop deploy, DB/secrets/auth/webhook/wiki apply 없음.
+
+## 2026-05-08 04:48 KST | OpenClaw/Hermes A6 natural validation correction
+
+### 작업 내용
+- 이전 세이브의 `03:28 자연 검증 재발 없음` 판정을 정정.
+- journalctl 기준 03:29:14, 03:58:50, 04:28:38 KST에 `No API key found`/`lane task error`/`Embedded agent failed` 재발 확인.
+- 후보 1은 소스/테스트/커밋/푸시는 완료됐지만 운영 30분 tick 차단은 미작동/부분 작동으로 재분류.
+
+### 검증
+- 조회 범위: `journalctl --user -u openclaw-gateway.service --since '2026-05-08 03:20:00' --until '2026-05-08 07:10:00'`.
+- 확인된 재발 PID: 24552(03:29), 26793(03:58/04:28).
+- 서비스 상태: `openclaw-gateway.service` active/running, MainPID 26793, start 03:36:09 KST.
+
+### 다음
+- 우선순위 2: 후보 1 진짜 30분 tick 진입 경로 진단.
+- 우선순위 3: 재구현 또는 v2 audit 결정은 사용자 결정 필요.
+
+## 2026-05-08 03:59 KST | OpenClaw/Hermes normalization A6 implementation
+
+### 작업 내용
+- 옵션 A 정상화 재설계 A6를 사용자 승인(1번: 두 후보 모두 구현) 후 진행했다.
+- OpenClaw autonomous cron agent의 빈 auth store 반복 실패를 차단/격리했다.
+- Hermes OpenClaw bridge plugin에 최소 audit jsonl 기록을 추가했다.
+- 결과 handoff와 Obsidian raw/dev save note를 작성했다.
+
+### 핵심 결정
+- auth/secret 파일 직접 수정은 하지 않았다.
+- 빈 `auth-profiles.json` + `profiles: {}`는 autonomous cron에서 explicit missing-auth 상태로 취급한다.
+- OpenClaw 직접 실행 경로 전체 통제와 9필드 풀 audit은 v2 audit/후속 작업으로 미뤘다.
+
+### 검증
+- OpenClaw targeted tests 11 passed.
+- Hermes plugin tests 17 passed.
+- OpenClaw dist build exit 0, gateway service restarted once and PID 26793/probe ok 확인.
+- 03:28 자연 검증 판정 정정: 03:29:14, 03:58:50, 04:28:38에 auth 실패/lane error 재발. 후보 1 운영 차단은 미작동/부분 작동.
+- 최종 독립 리뷰 passed.
+
+### 안전 경계
+- 시스템 재부팅, G3/D: 접근, DB/secrets/auth 파일 수정, webhook/wiki apply 없음.
+- OpenClaw gateway 서비스 재시작 1회는 A6 구현 반영/검증 범위에서 수행했다.
+
+---
+
+## 2026-05-08 02:55:01 KST | OpenClaw/Hermes constitution save and diagnosis handoff
+
+### 작업 내용
+- A 단계 헌법 저장을 작성/저장/검증 층위에서 마쳤다.
+- B 단계 OpenClaw + Hermes 정상 협업 진단을 수행했다.
+- 세션 압축/종료를 위해 `~/.hermes/sessions/handoff/2026-05-08-A-pending.md`와 Obsidian raw/dev save note를 작성했다.
+- 사용자 결정: 옵션 A 정상화 재설계 풀 진행, 새벽 6시 마감 목표. 다음 세션은 A0부터 시작한다.
+
+### 핵심 결정
+- OpenClaw 제거가 아니라 정상 협업 재설계가 다음 방향이다.
+- B 진단 결과는 다음 세션 A0 입력값이다.
+- 운영 런타임 강제 적용, Claude Code/Codex 주입, v2 audit 항목은 미완이다.
+
+### 검증
+- OpenClaw gateway: running, PID 276, `127.0.0.1:18789`, admin-capable.
+- Hermes bridge: `openclaw-bridge` enabled `0.4.0`.
+- USER.md 61줄과 헌법 SKILL.md 로드 검증은 A.4에서 확인했다.
+
+### 안전 경계
+- OpenClaw 제거/차단/비활성화, 새 코드 작성, 서비스 재시작, 시스템 재부팅, G3/D: 접근, DB/secrets/auth/webhook/wiki apply 없음.
+
+---
+
+## 2026-05-08 02:14 KST | Hermes Operating Constitution v1 approved save
+
+### 작업 내용
+- Hermes Operating Constitution v1 7개 섹션을 사용자 검토/확정 후 단일 skill로 저장했다.
+- 기존 `hermes-operating-constitution` skill이 `2026-05-08 01:34:55 KST`에 다른 CLI Hermes 세션에서 무단 선행 생성된 사실을 추적해 Section 7 위반 사례로 보존했다.
+- USER.md에 헌법 mandatory load 참조 1줄을 추가했다.
+- Obsidian raw/dev save note `hermes-2026-05-08-operating-constitution-v1-save.md`를 생성했다.
+
+### 핵심 결정
+- 헌법 원본은 `/home/sudol/.hermes/skills/hermes-operating-constitution/SKILL.md` 단일 skill이다.
+- USER/MEMORY에 긴 절차를 직접 넣지 않고 USER.md는 참조 1줄만 가진다.
+- v2 audit 시 같은 skill을 갱신하고 v1은 skill `references/`로 archive한다.
+
+### 검증
+- `skill_view hermes-operating-constitution` 로드 성공.
+- SKILL.md frontmatter YAML parse 성공: `status: active`, `created: 2026-05-08`, `unauthorized_pre_save` 포함.
+- USER.md 참조 line 확인.
+
+### 안전 경계
+- G3/D: 접근, Hermes gateway 서비스 재시작, 시스템 재부팅, 배포, DB/secrets/auth/webhook/wiki apply 없음.
+
+---
+
+## 2026-05-07 23:35 KST | AlphaCommand PWA Control Tower benchmark plan
+
+### 작업 내용
+- Capability Router 1차/read-only 기준을 이용해 “메신저 개선”이 아니라 AlphaCommand PWA Control Tower 직행 계획을 작성했다.
+- A0~A4 범위로 v4 master plan, recovery audit, Hermes/OpenClaw capability surface를 확인했다.
+- Obsidian raw/dev 계획 문서 `hermes-2026-05-07-alphacommand-pwa-control-tower-benchmark-plan.md`를 생성했다.
+
+### 핵심 결정
+- Telegram/Slack/Discord는 보조 알림/짧은 승인 채널로 격하한다.
+- Flutter/native 중간 앱은 필수 경로가 아니며, 모바일 PWA Control Tower 직행을 기본안으로 둔다.
+- 다음 승인 후보는 이 계획을 v4 master plan appendix로 통합하는 것이다.
+
+### 검증
+- 계획 문서 read-back: 252 lines / 12281 bytes.
+- 키워드 확인: Benchmark Matrix, Mobile IA, Hermes/OpenClaw/CLI Execution Gate, Approval Boundary, Cloudflare Access, Langfuse, n8n, Capability Router.
+- 현재 Hermes repo 상태 확인: `main...fork/main`, previous latest `1b1f05275`.
+- OpenClaw gateway status 확인: loopback 127.0.0.1:18789, connectivity ok.
+
+### 안전 경계
+- 코드 구현, MCP/plugin 활성화, Hermes gateway 서비스 재시작, 시스템 재부팅, G3/Desktop 배포, DB/secrets/auth/webhook/wiki apply 없음.
+
+---
+
+## 2026-05-07 23:06 KST | CLI ↔ Telegram shared-memory boundary save
+
+### 작업 내용
+- 사용자의 질문에 따라 CLI Hermes와 Telegram `Dr.에르메스`의 연결/기억 공유 범위를 명확히 정리했다.
+- 결론: 같은 A8 Hermes 저장소/메모리/세션 DB/Obsidian/shared-state 표면은 공유하지만, 실시간 단일 LLM 컨텍스트를 완전히 공유하는 구조는 아니다.
+- Obsidian raw/dev save note `hermes-2026-05-07-cli-telegram-shared-memory-save.md`를 생성했다.
+
+### 핵심 결정
+- 세이브된 `HANDOFF.md`, `WORKLOG.md`, Obsidian raw/dev, shared-state는 Telegram/CLI 모두가 읽을 수 있는 공통 기준이다.
+- Telegram 현재 세션 컨텍스트에 CLI 대화가 자동 주입되는 것은 보장하지 않는다.
+- Telegram/CLI 새 세션은 저장문서 읽기 또는 “기억 다시 복구해” 요청으로 같은 기준을 복구한다.
+
+### 검증
+- 저장 전 Hermes repo 상태: `main...fork/main`, latest `5899cc61d`.
+- 저장 전 shared-state repo 상태: `feature/shared-ai-state-20260506...origin/...`, latest `c9e50ef`.
+- Obsidian save note, HANDOFF/WORKLOG, shared-state JSON/JSONL을 read-back/parse 검증 대상으로 둔다.
+
+### 안전 경계
+- Hermes gateway 서비스 재시작, 시스템 재부팅, G3/Desktop 배포, DB/secrets/auth/webhook/wiki apply 없음.
+
+---
+
+## 2026-05-07 22:46 KST | Skill / workflow recovery audit
+
+### 작업 내용
+- 사용자가 지적한 누락축을 기준으로 세션 검색, v4 master plan, source skill injection plan, tri-tool-ddd-ai-workflow reference를 대조했다.
+- Obsidian raw/dev에 `hermes-2026-05-07-skill-workflow-recovery-audit.md`를 생성했다.
+- 복구 축: source skill injection, raw mirror/manifest, A0→A8 Alpha Workflow, 작업별 스킬 추천/조합, capability surface 상태 모델, Enterprise AI v4 model-routing gate 연결.
+
+### 검증
+- audit 문서 read-back 완료: 151 lines / 6175 bytes.
+- 확인 키워드: `source skill injection`, `1120`, `A0→A8`, `capability surface`, `difficulty_tier`.
+- raw mirror index 기준: mirrored 1120, skipped 0, missing_roots 0, redacted 55, mirrored_support 374.
+
+### 안전 경계
+- Hermes gateway 서비스 재시작, 시스템 재부팅, G3/Desktop 배포, DB/secrets/auth/webhook/wiki apply 없음.
+
+---
+
+
+## 2026-05-07 22:14 KST | Memory boundary recovery baseline
+
+### 작업 내용
+- 사용자가 지적한 최근 며칠 대화 기억 단절 문제를 session_search, Hermes HANDOFF/WORKLOG, shared-state, Obsidian raw/dev 기준으로 재구성했다.
+- 영구 메모리 전체 롤백 증거는 없지만, gateway restart/drain interrupt + context compression 이후 최근 Telegram 활성 문맥의 순서/토픽 구분이 손상된 것으로 경계선을 정의했다.
+- Obsidian raw/dev에 `hermes-2026-05-07-memory-boundary-recovery-baseline.md` 기준선을 작성했다.
+
+### 검증
+- 최근 세션 검색: gateway drain, Enterprise AI v4/model routing, OpenClaw/shared-state/Control Tower, Codex/Claude fallback 트랙 확인.
+- Hermes repo 상태 확인: `main...fork/main`, latest `eef0c86f8`.
+- Shared-state repo 상태 확인: `feature/shared-ai-state-20260506...origin/...`, latest `f215fd7`.
+- 기준선 문서 read-back + `wc -l -c` → 145 lines / 9175 bytes.
+
+### 안전 경계
+- 서비스 재시작, 시스템 재부팅, G3/Desktop 배포, DB/secrets/auth/webhook 변경 없음.
+
+---
+
+## 2026-05-07 21:43 KST | Gateway restart drain deferral fix
+
+### 작업 내용
+- Telegram 작업 중 `/restart`/gateway self-restart가 활성 agent를 즉시 stop/interrupt하지 않도록 deferred restart 경로를 구현했다.
+- `_running_agent_count()`를 pending sentinel 제외 기준으로 통일하고, drain/post-interrupt loop도 실제 agent 기준으로 판단하게 수정했다.
+- deferred restart가 오래 대기한 뒤 실제 시작될 때 Telegram `/restart` redelivery dedup marker timestamp를 갱신하도록 보강했다.
+- 회귀 테스트 4개를 추가했다: active agent deferral, pending sentinel command/drain 무시, dedup marker refresh.
+
+### 검증
+- TDD RED/GREEN: 신규 deferral 테스트 작성 후 구현.
+- `python -m pytest tests/gateway/test_restart_drain.py -q` → 19 passed.
+- `python -m py_compile gateway/run.py tests/gateway/test_restart_drain.py tests/gateway/restart_test_helpers.py` 통과.
+- `git diff --check` 통과.
+- `python -m pytest tests/gateway/test_restart_drain.py tests/gateway/test_run_progress_topics.py -q` → 47 passed.
+- static secret/shell/eval/pickle scan → no hits.
+- 독립 xrev 최종 리뷰 → PASS.
+- Shared-state sync: shared-state repo `git log -1 --oneline` 기준 최신 sync commit pushed to `origin/feature/shared-ai-state-20260506`.
+
+### 안전 경계
+- 이 구현/검증 중 Hermes gateway 서비스 재시작은 수행하지 않았다.
+- 시스템 재부팅, G3/Desktop 배포, DB/secrets/auth/webhook 변경 없음.
+
+---
+
+## 2026-05-07 20:51 KST | A8 reboot-prep handoff correction save
+
+### 작업 내용
+- Telegram 대화 기준 실제 완료 작업이 `AlphaMate Doctor`가 아니라 Hermes `capability_route` 구현/검증/저장임을 확인하고 보고 오류를 정정했다.
+- `HANDOFF.md`의 stale 브랜치명과 "재기반화 중" 문구를 현재 `main` / `fork/main` 상태로 정정했다.
+- A8 재부팅 전 복구용 상태와 다음 확인 절차를 HANDOFF에 남겼다.
+- 누락된 cross-runtime shared-state save surface를 추가로 보완하고 VibeCoding shared-state commit `45f2364`로 push했다.
+
+### 검증
+- `git status -sb` → `main...fork/main`.
+- `git log -1 --oneline --decorate` → `8df572640 (HEAD -> main, fork/main) feat: add read-only capability router tool`.
+- `python -m pytest tests/tools/test_capability_router_tool.py -q` → 13 passed.
+- Shared-state JSON/JSONL parse 및 push 확인: `45f2364` on `origin/feature/shared-ai-state-20260506`.
+
+### 안전 경계
+- A8 시스템 재부팅은 사용자가 직접 수행 예정이며, Hermes는 재부팅 명령을 실행하지 않았다.
+- Hermes gateway/service 재시작, G3/Desktop 배포, DB/secrets/auth/webhook 변경 없음.
+
+---
+
 ## 2026-05-07 | Capability Router v1 read-only tool
 
 ### 작업 내용
@@ -301,7 +535,8 @@
 - Control Tower projection에 넘길 수 있는 `installed/gateway/auth/execution_allowed` 계열 read-only evidence를 만들기 위한 기반이다.
 
 ### 검증/테스트 결과
-- `python -m pytest -o addopts= tests/plugins/test_openclaw_bridge_plugin.py` → 16 passed, 1 existing deprecation warning.
+- 원격 `origin/main`의 A8 진단/수정 커밋 14개를 일반 merge로 통합한 뒤 conflict를 해소했다.
+- `python -m pytest -o addopts= tests/plugins/test_openclaw_bridge_plugin.py` → 19 passed, 1 existing deprecation warning.
 - `python -m compileall plugins/openclaw-bridge/tools.py` 통과.
 - `git diff --check` 통과, CRLF warning only.
 
