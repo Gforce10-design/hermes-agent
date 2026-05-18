@@ -1,5 +1,5 @@
 name: openclaw-bridge
-version: 0.2.0
+version: 0.4.0
 description: Read-only OpenClaw bridge tools for Hermes worker/status inspection.
 author: Hermes Agent
 kind: standalone

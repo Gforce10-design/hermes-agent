@@ -44,7 +44,7 @@ cd /home/sudol/.hermes/hermes-agent
 git status --short
 git log -3 --oneline
 systemctl --user status hermes-gateway --no-pager
-venv/bin/python scripts/openclaw_bridge_smoke.py
+venv/bin/python plugins/openclaw-bridge/scripts/openclaw_bridge_smoke.py
 ```
 
 Expected:
@@ -67,7 +67,7 @@ systemctl --user restart hermes-gateway
 sleep 5
 systemctl --user status hermes-gateway --no-pager
 journalctl --user -u hermes-gateway -n 120 --no-pager
-venv/bin/python scripts/openclaw_bridge_smoke.py
+venv/bin/python plugins/openclaw-bridge/scripts/openclaw_bridge_smoke.py
 ```
 
 Post-restart acceptance criteria:
@@ -75,7 +75,7 @@ Post-restart acceptance criteria:
 - `hermes-gateway.service` is active.
 - Main PID has changed from the preflight PID.
 - No import error for `gateway.arbiter`, `gateway.delivery`, or `openclaw-bridge`.
-- `scripts/openclaw_bridge_smoke.py` passes.
+- `plugins/openclaw-bridge/scripts/openclaw_bridge_smoke.py` passes.
 - Existing non-arbiter delivery path remains available.
 - No outbound send is attempted during smoke.
 
