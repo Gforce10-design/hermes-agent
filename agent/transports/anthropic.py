@@ -65,7 +65,7 @@ class AnthropicTransport(ProviderTransport):
             model=model,
             messages=messages,
             tools=tools,
-            max_tokens=params.get("max_tokens", 16384),
+            max_tokens=params.get("max_tokens", 65536),
             reasoning_config=params.get("reasoning_config"),
             tool_choice=params.get("tool_choice"),
             is_oauth=params.get("is_oauth", False),
