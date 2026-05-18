@@ -361,29 +361,29 @@ class _CodexCompletionsAdapter:
         self._model = model
 
     def create(self, **kwargs) -> Any:
+        from agent.codex_responses_adapter import (
+            _chat_messages_to_responses_input,
+            _responses_tools,
+        )
+
         messages = kwargs.get("messages", [])
         model = kwargs.get("model", self._model)
 
-        # Separate system/instructions from conversation messages.
-        # Convert chat.completions multimodal content blocks to Responses
-        # API format (input_text / input_image instead of text / image_url).
+        # Reuse the main Responses adapter so auxiliary Codex calls handle
+        # tool results, assistant tool calls, multimodal content, and reasoning
+        # replay the same way as the primary Codex transport.
         instructions = "You are a helpful assistant."
-        input_msgs: List[Dict[str, Any]] = []
         for msg in messages:
-            role = msg.get("role", "user")
-            content = msg.get("content") or ""
-            if role == "system":
+            if not isinstance(msg, dict):
+                continue
+            if msg.get("role") == "system":
+                content = msg.get("content") or ""
                 instructions = content if isinstance(content, str) else str(content)
-            else:
-                input_msgs.append({
-                    "role": role,
-                    "content": _convert_content_for_responses(content),
-                })
 
         resp_kwargs: Dict[str, Any] = {
             "model": model,
             "instructions": instructions,
-            "input": input_msgs or [{"role": "user", "content": ""}],
+            "input": _chat_messages_to_responses_input(messages) or [{"role": "user", "content": ""}],
             "store": False,
         }
         timeout = kwargs.get("timeout")
@@ -396,18 +396,7 @@ class _CodexCompletionsAdapter:
         # Tools support for flush_memories and similar callers
         tools = kwargs.get("tools")
         if tools:
-            converted = []
-            for t in tools:
-                fn = t.get("function", {}) if isinstance(t, dict) else {}
-                name = fn.get("name")
-                if not name:
-                    continue
-                converted.append({
-                    "type": "function",
-                    "name": name,
-                    "description": fn.get("description", ""),
-                    "parameters": fn.get("parameters", {}),
-                })
+            converted = _responses_tools(tools)
             if converted:
                 resp_kwargs["tools"] = converted
 
