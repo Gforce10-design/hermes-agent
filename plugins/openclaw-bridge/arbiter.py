@@ -128,17 +128,32 @@ def is_governed_metadata(metadata: Mapping[str, Any] | None) -> bool:
 
 
 def arbitrate_send(
-    *,
-    metadata: Mapping[str, Any] | None,
-    target: str,
-    content: str,
-    cache: RoutingCache | None = None,
+    send_request: Mapping[str, Any] | None = None,
+    metadata: Mapping[str, Any] | None = None,
+    **kwargs: Any,
 ) -> Decision:
     """Return a delivery decision for an outbound send.
 
     The arbiter is opt-in.  Missing topic/bot metadata bypasses all checks.
     Once opted in, missing or malformed routing config fails closed.
     """
+    target = _text(kwargs.get("target"))
+    content = _text(kwargs.get("content"))
+    cache = kwargs.get("cache")
+
+    if isinstance(send_request, Mapping):
+        request_metadata = send_request.get("metadata")
+        if metadata is None and isinstance(request_metadata, Mapping):
+            metadata = request_metadata
+        target = _text(send_request.get("target")) or target
+        content = _text(send_request.get("content")) or content
+        request_cache = send_request.get("cache")
+        if cache is None and isinstance(request_cache, RoutingCache):
+            cache = request_cache
+
+    if not isinstance(cache, RoutingCache):
+        cache = None
+
     if not is_governed_metadata(metadata):
         return Decision(governed=False, allowed=True, reason="no arbiter metadata", status="bypass")
 

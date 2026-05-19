@@ -3,7 +3,8 @@ version: 0.4.0
 description: Read-only OpenClaw bridge tools for Hermes worker/status inspection.
 author: Hermes Agent
 kind: standalone
-provides_hooks: []
+provides_hooks:
+  - pre_outbound_dispatch
 provides_tools:
   - openclaw_status
   - openclaw_cli

@@ -13,6 +13,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import types
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
@@ -54,6 +55,26 @@ def _trim(value: str, limit: int = 1200) -> str:
     if len(value) <= limit:
         return value
     return value[:limit] + " ... [truncated]"
+
+
+def _ensure_openclaw_bridge_package() -> None:
+    parent_name = "hermes_plugins"
+    module_name = "hermes_plugins.openclaw_bridge"
+    if module_name in sys.modules:
+        return
+
+    plugin_dir = Path(__file__).resolve().parents[1]
+
+    if parent_name not in sys.modules:
+        parent = types.ModuleType(parent_name)
+        parent.__path__ = []  # type: ignore[attr-defined]
+        parent.__package__ = parent_name
+        sys.modules[parent_name] = parent
+
+    module = types.ModuleType(module_name)
+    module.__path__ = [str(plugin_dir)]  # type: ignore[attr-defined]
+    module.__package__ = module_name
+    sys.modules[module_name] = module
 
 
 def check_plugin_list() -> CheckResult:
@@ -105,7 +126,8 @@ def check_migration_dry_run() -> CheckResult:
 
 
 def check_arbiter_no_send() -> list[CheckResult]:
-    from gateway.arbiter import RoutingCache, arbitrate_send
+    _ensure_openclaw_bridge_package()
+    from hermes_plugins.openclaw_bridge.arbiter import RoutingCache, arbitrate_send
 
     old_home = os.environ.get("HERMES_HOME")
     results: list[CheckResult] = []

@@ -15,15 +15,37 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Any
 
 from hermes_cli.config import get_hermes_home
+from hermes_cli.plugins import invoke_hook
 
 logger = logging.getLogger(__name__)
 
 MAX_PLATFORM_OUTPUT = 4000
 TRUNCATED_VISIBLE = 3800
 
-from .arbiter import arbitrate_send
 from .config import Platform, GatewayConfig
 from .session import SessionSource
+
+
+def _is_governed_metadata(metadata: Dict[str, Any]) -> bool:
+    return bool(
+        str(metadata.get("arbiter_topic") or "").strip()
+        and str(metadata.get("arbiter_bot_name") or "").strip()
+    )
+
+
+def _default_outbound_deny(metadata: Dict[str, Any]) -> Dict[str, Any]:
+    routing_path = get_hermes_home() / "config" / "bot-routing.yml"
+    if routing_path.exists():
+        reason = "outbound arbiter hook not registered for governed metadata"
+    else:
+        reason = f"routing file not found: {routing_path}"
+    return {
+        "arbiter_governed": True,
+        "arbiter_allowed": False,
+        "arbiter_status": "denied",
+        "arbiter_reason": reason,
+        "arbiter_source": "hook-fallback",
+    }
 
 
 @dataclass
@@ -251,19 +273,44 @@ class DeliveryRouter:
         if target.thread_id and "thread_id" not in send_metadata:
             send_metadata["thread_id"] = target.thread_id
 
-        decision = arbitrate_send(
+        target_name = target.to_string()
+        send_request = {
+            "target": target_name,
+            "chat_id": target.chat_id,
+            "thread_id": target.thread_id,
+            "content": content,
+            "metadata": send_metadata,
+        }
+        hook_results = invoke_hook(
+            "pre_outbound_dispatch",
+            send_request=send_request,
             metadata=send_metadata,
-            target=target.to_string(),
+            target=target_name,
             content=content,
         )
-        if decision.governed:
-            send_metadata.update(decision.to_metadata())
-        if not decision.allowed:
-            logger.warning("Delivery denied by arbiter: %s", decision.reason)
-            return {"skipped": True, "reason": decision.reason, "arbiter": decision.to_metadata()}
+        decisions = [result for result in hook_results if result is not None]
+        if not decisions and _is_governed_metadata(send_metadata):
+            arbiter_metadata = _default_outbound_deny(send_metadata)
+            send_metadata.update(arbiter_metadata)
+            reason = arbiter_metadata["arbiter_reason"]
+            logger.warning("Delivery denied by outbound hook fallback: %s", reason)
+            return {"skipped": True, "reason": reason, "arbiter": arbiter_metadata}
+
+        decision = next(
+            (result for result in decisions if getattr(result, "allowed", True) is False),
+            decisions[0] if decisions else None,
+        )
+        if decision is not None:
+            to_metadata = getattr(decision, "to_metadata", None)
+            decision_metadata = to_metadata() if callable(to_metadata) else {}
+            if getattr(decision, "governed", False):
+                send_metadata.update(decision_metadata)
+            if not getattr(decision, "allowed", True):
+                reason = getattr(decision, "reason", "delivery denied")
+                logger.warning("Delivery denied by outbound hook: %s", reason)
+                return {"skipped": True, "reason": reason, "arbiter": decision_metadata}
 
         return await adapter.send(target.chat_id, content, metadata=send_metadata or None)
-
 
 
 

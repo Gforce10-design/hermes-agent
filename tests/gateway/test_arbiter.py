@@ -1,4 +1,35 @@
-from gateway.arbiter import RoutingCache, arbitrate_send, is_governed_metadata
+import sys
+import types
+from pathlib import Path
+
+
+def _ensure_openclaw_bridge_package() -> None:
+    parent_name = "hermes_plugins"
+    module_name = "hermes_plugins.openclaw_bridge"
+    if module_name in sys.modules:
+        return
+
+    repo_root = Path(__file__).resolve().parents[2]
+    plugin_dir = repo_root / "plugins" / "openclaw-bridge"
+
+    if parent_name not in sys.modules:
+        parent = types.ModuleType(parent_name)
+        parent.__path__ = []  # type: ignore[attr-defined]
+        parent.__package__ = parent_name
+        sys.modules[parent_name] = parent
+
+    module = types.ModuleType(module_name)
+    module.__path__ = [str(plugin_dir)]  # type: ignore[attr-defined]
+    module.__package__ = module_name
+    sys.modules[module_name] = module
+
+
+_ensure_openclaw_bridge_package()
+from hermes_plugins.openclaw_bridge.arbiter import (  # noqa: E402
+    RoutingCache,
+    arbitrate_send,
+    is_governed_metadata,
+)
 
 
 def test_metadata_without_topic_or_bot_is_not_governed():

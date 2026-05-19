@@ -79,6 +79,9 @@ VALID_HOOKS: Set[str] = {
     #   {"action": "allow"}  /  None             -> normal dispatch
     # Kwargs: event: MessageEvent, gateway: GatewayRunner, session_store.
     "pre_gateway_dispatch",
+    # Gateway outbound pre-dispatch hook. Fired before delivery sends to an
+    # external adapter. Plugins may return a Decision-like object.
+    "pre_outbound_dispatch",
 }
 
 ENTRY_POINTS_GROUP = "hermes_agent.plugins"

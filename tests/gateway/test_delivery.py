@@ -1,10 +1,40 @@
 """Tests for the delivery routing module."""
 
+import sys
+import types
+from pathlib import Path
+
 import pytest
 
+import gateway.delivery as delivery_module
 from gateway.config import Platform
 from gateway.delivery import DeliveryRouter, DeliveryTarget
 from gateway.session import SessionSource
+
+
+def _ensure_openclaw_bridge_package() -> None:
+    parent_name = "hermes_plugins"
+    module_name = "hermes_plugins.openclaw_bridge"
+    if module_name in sys.modules:
+        return
+
+    repo_root = Path(__file__).resolve().parents[2]
+    plugin_dir = repo_root / "plugins" / "openclaw-bridge"
+
+    if parent_name not in sys.modules:
+        parent = types.ModuleType(parent_name)
+        parent.__path__ = []  # type: ignore[attr-defined]
+        parent.__package__ = parent_name
+        sys.modules[parent_name] = parent
+
+    module = types.ModuleType(module_name)
+    module.__path__ = [str(plugin_dir)]  # type: ignore[attr-defined]
+    module.__package__ = module_name
+    sys.modules[module_name] = module
+
+
+_ensure_openclaw_bridge_package()
+from hermes_plugins.openclaw_bridge.arbiter import arbitrate_send  # noqa: E402
 
 
 class FakeAdapter:
@@ -111,6 +141,11 @@ class TestDeliveryArbiterHook:
     @pytest.mark.asyncio
     async def test_governed_metadata_allow_reaches_adapter(self, tmp_path, monkeypatch):
         monkeypatch.setenv("HERMES_HOME", str(tmp_path))
+        monkeypatch.setattr(
+            delivery_module,
+            "invoke_hook",
+            lambda _hook_name, **kwargs: [arbitrate_send(**kwargs)],
+        )
         routing_dir = tmp_path / "config"
         routing_dir.mkdir()
         (routing_dir / "bot-routing.yml").write_text(
@@ -130,5 +165,4 @@ class TestDeliveryArbiterHook:
 
         assert result == {"messageId": "m1"}
         assert adapter.calls[0]["metadata"]["arbiter_allowed"] is True
-
 

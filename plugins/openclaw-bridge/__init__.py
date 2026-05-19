@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 
+from .arbiter import arbitrate_send
 from .tools import (
     OPENCLAW_CLI_SCHEMA,
     OPENCLAW_STATUS_SCHEMA,
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 def register(ctx) -> None:
     """Register read-only OpenClaw bridge tools."""
+    ctx.register_hook("pre_outbound_dispatch", arbitrate_send)
     ctx.register_tool(
         name="openclaw_status",
         toolset="openclaw",
