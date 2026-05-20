@@ -7439,10 +7439,27 @@ class AIAgent:
                 )
             )
             is_xai_responses = self.provider == "xai" or self._base_url_hostname == "api.x.ai"
+
+            # xAI's /responses endpoint rejects ``pattern``/``format`` keywords
+            # in tool schemas (HTTP 400 "Invalid arguments passed to the model").
+            # Most commonly hit when MCP-derived tools carry JSON Schema
+            # validation keywords through. Strip them before building kwargs.
+            # See #27197.
+            tools_for_api = self.tools
+            if is_xai_responses:
+                try:
+                    from tools.schema_sanitizer import strip_pattern_and_format
+                    tools_for_api, _ = strip_pattern_and_format(tools_for_api)
+                except Exception as exc:
+                    logger.warning(
+                        "%s⚠️ Failed to sanitize tool schemas for xAI: %s",
+                        self.log_prefix, exc,
+                    )
+
             return _ct.build_kwargs(
                 model=self.model,
                 messages=api_messages,
-                tools=self.tools,
+                tools=tools_for_api,
                 reasoning_config=self.reasoning_config,
                 session_id=getattr(self, "session_id", None),
                 max_tokens=self.max_tokens,

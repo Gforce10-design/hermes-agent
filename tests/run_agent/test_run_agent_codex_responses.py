@@ -93,6 +93,61 @@ def _codex_message_response(text: str):
     )
 
 
+def _build_xai_agent(monkeypatch):
+    _patch_agent_bootstrap(monkeypatch)
+
+    agent = run_agent.AIAgent(
+        model="grok-4-fast-reasoning",
+        provider="xai",
+        api_mode="codex_responses",
+        base_url="https://api.x.ai/v1",
+        api_key="xai-token",
+        quiet_mode=True,
+        max_iterations=4,
+        skip_context_files=True,
+        skip_memory=True,
+    )
+    agent._cleanup_task_resources = lambda task_id: None
+    agent._persist_session = lambda messages, history=None: None
+    agent._save_trajectory = lambda messages, user_message, completed: None
+    agent._save_session_log = lambda messages: None
+    return agent
+
+
+def test_xai_responses_sanitizes_tool_schemas(monkeypatch):
+    """xAI /responses path strips pattern/format from tool schemas (#27197)."""
+    agent = _build_xai_agent(monkeypatch)
+    agent.tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "probe",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "x": {"type": "string", "pattern": "\\d+", "format": "email"}
+                    },
+                },
+            },
+        }
+    ]
+
+    import tools.schema_sanitizer as _ss
+
+    calls = []
+    _real = _ss.strip_pattern_and_format
+
+    def _spy(tools):
+        calls.append(tools)
+        return _real(tools)
+
+    monkeypatch.setattr(_ss, "strip_pattern_and_format", _spy)
+
+    agent._build_api_kwargs([])
+
+    assert calls, "strip_pattern_and_format should run on the xAI responses path"
+
+
 def _codex_tool_call_response():
     return SimpleNamespace(
         output=[
