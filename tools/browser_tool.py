@@ -74,9 +74,13 @@ except Exception:
     check_website_access = lambda url: None  # noqa: E731 — fail-open if policy module unavailable
 
 try:
-    from tools.url_safety import is_safe_url as _is_safe_url
+    from tools.url_safety import (
+        is_safe_url as _is_safe_url,
+        is_always_blocked_url as _is_always_blocked_url,
+    )
 except Exception:
     _is_safe_url = lambda url: False  # noqa: E731 — fail-closed: block all if safety module unavailable
+    _is_always_blocked_url = lambda url: True  # noqa: E731 — fail-closed on the floor too
 from tools.browser_providers.base import CloudBrowserProvider
 from tools.browser_providers.browserbase import BrowserbaseProvider
 from tools.browser_providers.browser_use import BrowserUseProvider
@@ -1518,6 +1522,16 @@ def browser_navigate(url: str, task_id: Optional[str] = None) -> str:
                      "Secrets must not be sent in URLs.",
         })
 
+    # Always-blocked floor: cloud metadata / IMDS endpoints are denied
+    # regardless of backend or allow_private_urls (#16234). There is no
+    # legitimate agent use case for navigating to 169.254.169.254 /
+    # metadata.google.internal / ECS task metadata via a browser.
+    if not _is_local_backend() and _is_always_blocked_url(url):
+        return json.dumps({
+            "success": False,
+            "error": "Blocked: URL targets a cloud metadata endpoint",
+        })
+
     # SSRF protection — block private/internal addresses before navigating.
     # Skipped for local backends (Camofox, headless Chromium without a cloud
     # provider) because the agent already has full local network access via
@@ -1561,6 +1575,16 @@ def browser_navigate(url: str, task_id: Optional[str] = None) -> str:
         data = result.get("data", {})
         title = data.get("title", "")
         final_url = data.get("url", url)
+
+        # Always-blocked floor on the redirect target (#16234) — cloud
+        # metadata endpoints are denied even when allow_private_urls is set.
+        if not _is_local_backend() and final_url and final_url != url and _is_always_blocked_url(final_url):
+            # Navigate away to a blank page to prevent snapshot leaks
+            _run_browser_command(effective_task_id, "open", ["about:blank"], timeout=10)
+            return json.dumps({
+                "success": False,
+                "error": "Blocked: redirect landed on a cloud metadata endpoint",
+            })
 
         # Post-redirect SSRF check — if the browser followed a redirect to a
         # private/internal address, block the result so the model can't read
