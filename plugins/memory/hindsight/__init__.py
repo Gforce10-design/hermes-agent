@@ -592,6 +592,14 @@ class HindsightMemoryProvider(MemoryProvider):
             sys.stdout.write("  LLM API key: ")
             sys.stdout.flush()
             llm_key = getpass.getpass(prompt="") if sys.stdin.isatty() else sys.stdin.readline().strip()
+            # Blank input preserves any existing key instead of clobbering it:
+            # the .env rewrite below overwrites the line in place, and the
+            # downstream fallback reads .env *after* that, so a blank here would
+            # otherwise wipe the stored key.
+            if not llm_key:
+                llm_key = _load_simple_env(Path(hermes_home) / ".env").get(
+                    "HINDSIGHT_LLM_API_KEY", ""
+                )
             # Always write explicitly (including empty) so the provider sees ""
             # rather than a missing variable.  The daemon reads from .env at
             # startup and fails when HINDSIGHT_LLM_API_KEY is unset.
