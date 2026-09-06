@@ -312,8 +312,16 @@ class HermesACPAgent(SlashCommandsMixin, acp.Agent):
         try:
             from hermes_cli.models import detect_provider_for_model, parse_model_input
 
-            target_provider, new_model = parse_model_input(new_model, current_provider)
-            if target_provider == current_provider:
+            requested = new_model
+            target_provider, new_model = parse_model_input(requested, current_provider)
+            # An explicit ``provider:model`` must win. Only auto-detect for a bare model
+            # name; otherwise ``openai-codex:gpt-6-astra`` on an openai-codex session is
+            # re-routed to openrouter (the OpenRouter catalog also lists the model) and
+            # the switch fails with "No LLM provider configured" when no openrouter key
+            # exists -- editors and harnesses send the prefixed id straight from
+            # ``availableModels``.
+            explicit_provider = new_model != requested
+            if target_provider == current_provider and not explicit_provider:
                 detected = detect_provider_for_model(new_model, current_provider)
                 if detected:
                     target_provider, new_model = detected
